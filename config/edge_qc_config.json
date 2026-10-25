@@ -1,0 +1,68 @@
+{
+  "T_MED": 22.1,
+  "T_HIGH": 45.8,
+  "LOCK_IN_FRAMES": 4,
+  "CONF_THRESHOLD": 0.35,
+  "IOU_THRESHOLD": 0.55,
+  "CLASSES": [
+    "crazing",
+    "inclusion",
+    "patches",
+    "pitted_surface",
+    "rolled-in_scale",
+    "scratches"
+  ],
+  "KB": {
+    "crazing": {
+      "cause": "Thermal stress from rapid, uneven cooling during casting",
+      "actions": {
+        "Low": "Log the part and watch the cooling spray nozzles",
+        "Medium": "Hold the part; inspect cooling spray nozzles before next batch",
+        "High": "Quarantine the coil and inspect the cooling spray nozzles now"
+      }
+    },
+    "inclusion": {
+      "cause": "Non-metallic slag or refractory particles trapped in the steel",
+      "actions": {
+        "Low": "Log the part; check tundish slag flux coverage at next stop",
+        "Medium": "Flag the slab batch and check tundish slag flux coverage",
+        "High": "Quarantine the slab batch and check tundish slag flux coverage now"
+      }
+    },
+    "patches": {
+      "cause": "Uneven pickling acid residue or rolling emulsion stain on the strip",
+      "actions": {
+        "Low": "Log the part; check pickling rinse sprays at next stop",
+        "Medium": "Clean the strip surface and check the pickling rinse sprays",
+        "High": "Hold the strip and check the pickling tank and rinse sprays now"
+      }
+    },
+    "pitted_surface": {
+      "cause": "Work-roll spalling or hard oxide particles pressed into the surface",
+      "actions": {
+        "Low": "Log the part and inspect the work rolls at the next stop",
+        "Medium": "Inspect the work rolls for pitting before the next batch",
+        "High": "Quarantine the part and inspect the work rolls for pitting now"
+      }
+    },
+    "rolled-in_scale": {
+      "cause": "Incomplete high-pressure descaling before hot rolling",
+      "actions": {
+        "Low": "Log the part; check descaler nozzle pressure at next stop",
+        "Medium": "Check the descaler nozzle pressure and flag the sheet",
+        "High": "Quarantine the sheet and increase the descaler nozzle pressure now"
+      }
+    },
+    "scratches": {
+      "cause": "Mechanical friction from misaligned guide rails or roller burrs",
+      "actions": {
+        "Low": "Log the part; check conveyor guide rails at next stop",
+        "Medium": "Inspect the guide rails and rollers for burrs before the next batch",
+        "High": "Quarantine the part, align guide rails and deburr contact rollers now"
+      }
+    }
+  },
+  "SYSTEM_PROMPT": "You are an automotive steel quality-control assistant. Rewrite the reference into ONE line, exactly: Likely Cause: <max 12 words> | Recommended Action: <max 12 words>. Use only facts from the reference. Do not add numbers. Do not mention people.",
+  "FEWSHOT_USER": "Defect: edge_burr | Area: 4.0% | Severity: Medium\nReference cause: Worn slitter knife clearance on the strip edge\nReference action: Adjust the slitter blade gap before the next batch",
+  "FEWSHOT_ASSISTANT": "Likely Cause: Worn slitter knife clearance on strip edge | Recommended Action: Adjust slitter blade gap before the next batch"
+}
