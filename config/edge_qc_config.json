@@ -4,6 +4,15 @@
   "LOCK_IN_FRAMES": 4,
   "CONF_THRESHOLD": 0.35,
   "IOU_THRESHOLD": 0.55,
+  "ALLOW_KB_FALLBACK": false,
+  "INFERENCE_MODE": "LIVE_LLAMA_PTE_ONLY",
+  "STEEL_SURFACE_GATE": {
+    "SATURATION_PIXEL_THRESHOLD": 65,
+    "BOX_MAX_MEAN_S": 42.0,
+    "BOX_MAX_COLORFUL_RATIO": 0.20,
+    "FRAME_MAX_MEAN_S": 48.0,
+    "FRAME_MAX_COLORFUL_RATIO": 0.25
+  },
   "CLASSES": [
     "crazing",
     "inclusion",
@@ -14,55 +23,85 @@
   ],
   "KB": {
     "crazing": {
-      "cause": "Thermal stress from rapid, uneven cooling during casting",
+      "stage": "Continuous Casting / Secondary Cooling Zone",
+      "cause": "Thermal tensile stress from rapid uneven mold and secondary spray cooling during casting",
+      "causes_by_pattern": {
+        "isolated": "Localized thermal gradient from uneven mold flux lubrication during casting",
+        "clustered": "Severe thermal tensile stress from clogged secondary cooling spray nozzles"
+      },
       "actions": {
-        "Low": "Log the part and watch the cooling spray nozzles",
-        "Medium": "Hold the part; inspect cooling spray nozzles before next batch",
-        "High": "Quarantine the coil and inspect the cooling spray nozzles now"
+        "Low": "Log coil ID and verify secondary cooling spray nozzle alignment at next stop",
+        "Medium": "Hold coil for crack-depth check and inspect mold cooling water flow before next heat",
+        "High": "Quarantine coil immediately and replace blocked secondary cooling spray nozzles now"
       }
     },
     "inclusion": {
-      "cause": "Non-metallic slag or refractory particles trapped in the steel",
+      "stage": "Steelmaking / Tundish & Mold Casting",
+      "cause": "Non-metallic slag or refractory alumina particles entrapped in solidifying steel",
+      "causes_by_pattern": {
+        "isolated": "Detached alumina or refractory particle entrapped near strip subsurface",
+        "clustered": "Tundish slag vortexing or submerged entry nozzle shroud air re-oxidation"
+      },
       "actions": {
-        "Low": "Log the part; check tundish slag flux coverage at next stop",
-        "Medium": "Flag the slab batch and check tundish slag flux coverage",
-        "High": "Quarantine the slab batch and check tundish slag flux coverage now"
+        "Low": "Log slab ID and check tundish slag flux powder depth at next heat change",
+        "Medium": "Flag slab batch for ultrasonic check and inspect submerged entry nozzle shroud seal",
+        "High": "Quarantine slab batch immediately and stabilize tundish bath level and slag flux now"
       }
     },
     "patches": {
-      "cause": "Uneven pickling acid residue or rolling emulsion stain on the strip",
+      "stage": "Acid Pickling & Cascade Rinse Line",
+      "cause": "Uneven pickling acid residue or rolling oil emulsion stain on strip surface",
+      "causes_by_pattern": {
+        "isolated": "Localized squeegee roll drip or residual rolling emulsion spot on strip",
+        "clustered": "Depleted pickling acid bath concentration and blocked cascade rinse spray headers"
+      },
       "actions": {
-        "Low": "Log the part; check pickling rinse sprays at next stop",
-        "Medium": "Clean the strip surface and check the pickling rinse sprays",
-        "High": "Hold the strip and check the pickling tank and rinse sprays now"
+        "Low": "Log strip section and inspect wringer squeegee rolls at next coil weld",
+        "Medium": "Re-clean strip surface and check pickling rinse spray header pressure and acid titration",
+        "High": "Hold strip immediately, purge contaminated rinse tank and restore squeegee roll pressure now"
       }
     },
     "pitted_surface": {
-      "cause": "Work-roll spalling or hard oxide particles pressed into the surface",
+      "stage": "Cold / Hot Finishing Work-Roll Stand",
+      "cause": "Work-roll surface fatigue spalling or hard oxide debris indented into strip",
+      "causes_by_pattern": {
+        "isolated": "Loose hard oxide particle indented into strip at finishing stand nip",
+        "clustered": "Periodic work-roll surface fatigue spalling and worn roll-wiper brush assembly"
+      },
       "actions": {
-        "Low": "Log the part and inspect the work rolls at the next stop",
-        "Medium": "Inspect the work rolls for pitting before the next batch",
-        "High": "Quarantine the part and inspect the work rolls for pitting now"
+        "Low": "Log part and inspect finishing stand work-roll surface at next scheduled stop",
+        "Medium": "Clean roll wiper brushes and inspect work rolls for cyclic pitting before next coil",
+        "High": "Quarantine sheet immediately and schedule work-roll change and roll re-grinding now"
       }
     },
     "rolled-in_scale": {
-      "cause": "Incomplete high-pressure descaling before hot rolling",
+      "stage": "Hot Strip Mill High-Pressure Descaler",
+      "cause": "Incomplete high-pressure hydraulic descaling before hot-finishing rolling stands",
+      "causes_by_pattern": {
+        "isolated": "Residual secondary blister scale flake pressed into strip at roughing stand",
+        "clustered": "Low descaler header water pressure or clogged flat-fan descaling nozzles"
+      },
       "actions": {
-        "Low": "Log the part; check descaler nozzle pressure at next stop",
-        "Medium": "Check the descaler nozzle pressure and flag the sheet",
-        "High": "Quarantine the sheet and increase the descaler nozzle pressure now"
+        "Low": "Log sheet and check descaler header pressure gauge at next slab gap",
+        "Medium": "Flag sheet for surface conditioning and test descaler nozzle spray overlap pattern",
+        "High": "Quarantine sheet immediately, restore descaler pump pressure and clear blocked nozzles now"
       }
     },
     "scratches": {
-      "cause": "Mechanical friction from misaligned guide rails or roller burrs",
+      "stage": "Conveyor Guide Table & Bridle Rollers",
+      "cause": "Mechanical friction abrasion from misaligned entry guide rails or seized roller burrs",
+      "causes_by_pattern": {
+        "isolated": "Single sharp metal burr on entry side-guide liner rubbing moving strip",
+        "clustered": "Seized table roller or misaligned pinch-roll guide bar gouging strip surface"
+      },
       "actions": {
-        "Low": "Log the part; check conveyor guide rails at next stop",
-        "Medium": "Inspect the guide rails and rollers for burrs before the next batch",
-        "High": "Quarantine the part, align guide rails and deburr contact rollers now"
+        "Low": "Log strip and inspect entry side-guide wear plates at next line pause",
+        "Medium": "Polish contact rollers and deburr conveyor guide rails before next coil",
+        "High": "Quarantine strip immediately, realign side guides and replace seized table roller now"
       }
     }
   },
-  "SYSTEM_PROMPT": "You are an automotive steel quality-control assistant. Rewrite the reference into ONE line, exactly: Likely Cause: <max 12 words> | Recommended Action: <max 12 words>. Use only facts from the reference. Do not add numbers. Do not mention people.",
-  "FEWSHOT_USER": "Defect: edge_burr | Area: 4.0% | Severity: Medium\nReference cause: Worn slitter knife clearance on the strip edge\nReference action: Adjust the slitter blade gap before the next batch",
-  "FEWSHOT_ASSISTANT": "Likely Cause: Worn slitter knife clearance on strip edge | Recommended Action: Adjust slitter blade gap before the next batch"
+  "SYSTEM_PROMPT": "You are an industrial steel mill quality-control AI assistant. Given one or more detected steel surface defects and their retrieved metallurgical reference notes, synthesize ONE combined advisory line covering ALL detected defects in this exact format:\nLikely Cause: <concise root cause covering all detected defects, 6 to 16 words> | Recommended Action: <concise action covering all detected defects, 6 to 16 words>\nUse ONLY facts from the provided reference notes. Do NOT invent numbers, temperatures, or mention human operators.",
+  "FEWSHOT_USER": "Detected Defects: edge_burr (Conf: 86.0%, Area: 12.4%, Boxes: 1, Pattern: isolated) + coil_break (Conf: 79.0%, Area: 24.5%, Boxes: 2, Pattern: clustered) | Overall Severity: Medium\nReference notes:\n- edge_burr (Slitter Line): cause = Worn slitter rotary knife clearance on strip edge | action = Adjust slitter blade axial gap before next coil\n- coil_break (Uncoiler Leveler): cause = Excessive strip yield tension at uncoiler mandrel | action = Adjust anti-fluting leveler roll pressure before next coil",
+  "FEWSHOT_ASSISTANT": "Likely Cause: Worn slitter rotary knife clearance and excessive uncoiler mandrel yield tension | Recommended Action: Adjust slitter blade axial gap and recalibrate leveler roll pressure before next coil"
 }
