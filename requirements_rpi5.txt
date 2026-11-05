@@ -1,0 +1,7 @@
+# Bharat AI-SoC PS5: Raspberry Pi 5 Dependencies (Ubuntu 24.04 LTS arm64)
+flask>=3.0.0
+opencv-python-headless>=4.8.0
+onnxruntime>=1.18.0
+numpy>=1.24.0,<2.2.0
+pillow>=10.0.0
+

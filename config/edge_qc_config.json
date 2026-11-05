@@ -1,0 +1,56 @@
+{
+  "T_MED": 22.1,
+  "T_HIGH": 45.8,
+  "LOCK_IN_FRAMES": 4,
+  "CONF_THRESHOLD": 0.35,
+  "IOU_THRESHOLD": 0.55,
+  "LLAMA_PTE_FILENAME": "Llama-3.2-1B-UnifiedQC-FT-INT4.pte",
+  "STEEL_SURFACE_GATE": {
+    "SATURATION_PIXEL_THRESHOLD": 65,
+    "BOX_MAX_MEAN_S": 42.0,
+    "BOX_MAX_COLORFUL_RATIO": 0.20,
+    "FRAME_MAX_MEAN_S": 48.0,
+    "FRAME_MAX_COLORFUL_RATIO": 0.25
+  },
+  "CLASSES": [
+    "crazing",
+    "inclusion",
+    "patches",
+    "pitted_surface",
+    "rolled-in_scale",
+    "scratches"
+  ],
+  "SYSTEM_PROMPT": "You are an industrial steel mill quality-control AI assistant. Given YOLO vision telemetry for detected steel surface defects, reply in one line: Likely Cause: <root cause> | Recommended Action: <operator action>",
+  "PIPELINE_MODE": "AUTO",
+  "STAGE0": {
+    "MODEL_PATH": "models/stage0_selector_224.onnx",
+    "T_STAGE0": 0.50,
+    "T_PART_MIN": 0.60,
+    "CLASSES": [
+      "part",
+      "steel_sheet",
+      "unclear"
+    ],
+    "INPUT_SIZE": 224
+  },
+  "MODE2_NUT": {
+    "MODEL_PATH": "models/mvtec_efficientad_s.onnx",
+    "T_IMG": 0.4594,
+    "T_PIX": 0.1676,
+    "T_MED_NUT": 1.50,
+    "T_HIGH_NUT": 5.00,
+    "LOCK_IN_FRAMES": 4,
+    "LOCK_IN_IOU": 0.30,
+    "SCORE_TOLERANCE": 0.25,
+    "INPUT_SIZE": 256,
+    "TOP_K_PIXELS": 50,
+    "MIN_REGION_AREA_PCT": 0.2
+  },
+  "UNIFIED_LLAMA": {
+    "LLAMA_PTE_FILENAME": "Llama-3.2-1B-UnifiedQC-FT-INT4.pte",
+    "TOKENIZER_PATH": "models/tokenizer.model",
+    "TEMPERATURE": 0.0,
+    "SEQ_LEN": 256,
+    "CPU_THREADS": 4
+  }
+}
