@@ -9,7 +9,6 @@ env/
 *.pte
 *.bin
 *.safetensors
-*.onnx
 *.so
 pte_chunk_*
 *.log
