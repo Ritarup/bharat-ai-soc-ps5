@@ -1,10 +1,10 @@
 # Bharat AI-SoC Challenge 2026–27 | Problem Statement 5
 # Unified Multi-Mode Industrial Edge Quality Control (QC) Assistant on Raspberry Pi 5 + 13 TOPS AI HAT (Hailo-8L)
 
-[![Target Hardware](https://img.shields.io/badge/Hardware-Raspberry%20Pi%205%20(8GB)-C51A4A?logo=raspberry-pi&logoColor=white)](https://www.raspberrypi.com/products/raspberry-pi-5/)
+[![Target Hardware](https://img.shields.io/badge/Hardware-Raspberry%20Pi%205%20%288GB%29-C51A4A?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/products/raspberry-pi-5/)
 [![AI Accelerator](https://img.shields.io/badge/NPU-Hailo--8L%2013%20TOPS%20PCIe-007ACC)](https://hailo.ai/products/ai-accelerators/hailo-8l-ai-accelerator-entry-level-m-2/)
 [![Vision Core](https://img.shields.io/badge/Vision-YOLO11n%20%7C%20EfficientAD--S-2ECC71)](https://docs.ultralytics.com/models/yolo11/)
-[![Edge LLM](https://img.shields.io/badge/GenAI-Llama%203.2%201B%20INT4%20(ExecuTorch)-0467DF)](https://pytorch.org/executorch/)
+[![Edge LLM](https://img.shields.io/badge/GenAI-Llama%203.2%201B%20INT4%20%28ExecuTorch%29-0467DF)](https://pytorch.org/executorch/)
 [![Operating System](https://img.shields.io/badge/OS-Raspberry%20Pi%20OS%20%2F%20Ubuntu%2024.04-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/download/raspberry-pi)
 [![Interface](https://img.shields.io/badge/SCADA-Dark%20Industrial%20Web%20Station-161A1F)](http://localhost:5000)
 
