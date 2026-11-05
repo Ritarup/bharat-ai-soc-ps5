@@ -1,29 +1,44 @@
+# Python bytecode & cache
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
 .venv/
 venv/
+ENV/
 env/
-*.egg-info/
-.env
-.env.*
-*.pte
-*.bin
-*.safetensors
-*.so
-pte_chunk_*
+
+# Operating system artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# User uploads & runtime temp files
+uploads/*
+!uploads/.gitkeep
+current_prompt.txt
 *.log
 *.tmp
 *.bak
-current_prompt.txt
-rpi5_qc_inspection_log.csv
-user_cam_feed.jpg
-uploads/*
-!uploads/.gitkeep
-llama_main
-backups/
-scratch/
-archive_legacy/
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+
+# Large ExecuTorch Model File
+*.pte
+

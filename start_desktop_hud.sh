@@ -7,6 +7,8 @@ cd "$(dirname "$0")"
 # Activate virtual environment if present
 if [ -d ".venv" ]; then
     source .venv/bin/activate
+elif [ -d "$HOME/executorch/.venv" ]; then
+    source "$HOME/executorch/.venv/bin/activate"
 fi
 
 echo "=================================================================="

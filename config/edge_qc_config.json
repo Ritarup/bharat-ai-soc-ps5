@@ -35,7 +35,7 @@
   },
   "MODE2_NUT": {
     "MODEL_PATH": "models/mvtec_efficientad_s.onnx",
-    "T_IMG": 0.4594,
+    "T_IMG": 0.35,
     "T_PIX": 0.1676,
     "T_MED_NUT": 1.50,
     "T_HIGH_NUT": 5.00,

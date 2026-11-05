@@ -234,13 +234,15 @@
       height: 100%;
       object-fit: contain;
       display: block;
+      padding: 48px 24px 62px 24px;
+      box-sizing: border-box;
     }
 
     /* Corner Chip: Source Tag & Playlist Selector */
     .corner-chip-left {
       position: absolute;
-      top: 14px;
-      left: 16px;
+      top: 12px;
+      left: 14px;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -249,7 +251,7 @@
       -webkit-backdrop-filter: blur(8px);
       border: 1px solid rgba(42, 47, 55, 0.80);
       border-radius: 6px;
-      padding: 6px 10px;
+      padding: 5px 10px;
       font-family: var(--font-mono);
       font-size: 12px;
       color: var(--text-muted);
@@ -562,6 +564,9 @@
     }
 
     .advisory-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
@@ -569,55 +574,32 @@
       text-transform: uppercase;
     }
 
+    .advisory-spinner {
+      display: none;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(56, 178, 160, 0.22);
+      border-top-color: var(--accent-teal);
+      border-radius: 50%;
+      box-sizing: border-box;
+      animation: advisorySpin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .advisory-spinner.active {
+      display: inline-block;
+    }
+
+    @keyframes advisorySpin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     .advisory-body {
       font-size: 13px;
       line-height: 1.38;
       color: var(--text-main);
       word-break: break-word;
-    }
-
-    /* Generating Shimmer & Counter (cause/action only) */
-    .generating-indicator {
-      display: none;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px;
-      background: rgba(56, 178, 160, 0.06);
-      border: 1px solid rgba(56, 178, 160, 0.25);
-      border-radius: 6px;
-    }
-
-    .generating-indicator.active {
-      display: flex;
-    }
-
-    .shimmer-track {
-      height: 4px;
-      width: 100%;
-      background: var(--border-subtle);
-      border-radius: 2px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .shimmer-bar {
-      height: 100%;
-      width: 40%;
-      background: var(--accent-teal);
-      border-radius: 2px;
-      animation: shimmerMove 1.4s ease-in-out infinite;
-    }
-
-    @keyframes shimmerMove {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(250%); }
-    }
-
-    .generating-timer-text {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: var(--accent-teal);
-      font-weight: 600;
     }
 
     /* Card 4: Advisory Source Chip */
@@ -981,19 +963,19 @@
 
       <!-- Card 3: Advisory Section (Root Cause & Recommended Action) -->
       <div class="panel-card advisory-card">
-        <!-- Generating Timer & Shimmer (Cause/Action area only) -->
-        <div class="generating-indicator" id="generating-indicator">
-          <div class="shimmer-track"><div class="shimmer-bar"></div></div>
-          <div class="generating-timer-text" id="generating-timer-text">Generating advisory… 0.0s</div>
-        </div>
-
         <div class="advisory-group" id="group-cause">
-          <div class="advisory-label">Possible Cause</div>
+          <div class="advisory-label">
+            <span>Possible Cause</span>
+            <div class="advisory-spinner" id="spinner-cause"></div>
+          </div>
           <div class="advisory-body" id="hud-cause-text">No defect detected</div>
         </div>
 
         <div class="advisory-group" id="group-action">
-          <div class="advisory-label">Recommended Action</div>
+          <div class="advisory-label">
+            <span>Recommended Action</span>
+            <div class="advisory-spinner" id="spinner-action"></div>
+          </div>
           <div class="advisory-body" id="hud-action-text">Pass component to next stage</div>
         </div>
       </div>
@@ -1097,8 +1079,11 @@
     setInterval(fetchLiveFrame, 35);
 
     function clearOldAdvisoryDisplay() {
-      document.getElementById('generating-indicator').classList.remove('active');
-      document.getElementById('hud-cause-text').innerText = "Scanning strip...";
+      const spinCause = document.getElementById('spinner-cause');
+      const spinAction = document.getElementById('spinner-action');
+      if (spinCause) spinCause.classList.remove('active');
+      if (spinAction) spinAction.classList.remove('active');
+      document.getElementById('hud-cause-text').innerText = "Scanning component...";
       document.getElementById('hud-action-text').innerText = "Awaiting defect verification...";
       document.getElementById('hud-source-tag').innerText = "System Ready";
       document.getElementById('inspection-state-text').innerText = "SCANNING";
@@ -1170,7 +1155,10 @@
     function onFileSelected(path) {
       if (!path) return;
       clearOldAdvisoryDisplay();
-      fetch(`/api/select_item?path=${encodeURIComponent(path)}`).then(() => updateState());
+      fetch(`/api/select_item?path=${encodeURIComponent(path)}`).then(() => {
+        fetchLiveFrame();
+        updateState();
+      });
     }
 
     // 4. File Upload
@@ -1317,7 +1305,17 @@
         const isNonSteel = (data.defect && (data.defect.includes("NON-STEEL") || data.defect.includes("NON-METALLIC")));
 
         sevBadge.className = 'severity-badge';
-        if (isNonSteel) {
+        if (data.defect === "CAMERA OFFLINE") {
+          sevBadge.classList.add('badge-pass');
+          sevBadge.innerText = "STANDBY";
+          accentBar.style.background = "#4B5563";
+          stateText.innerText = "CAMERA OFFLINE";
+        } else if (data.defect === "NO MEDIA LOADED") {
+          sevBadge.classList.add('badge-pass');
+          sevBadge.innerText = "STANDBY";
+          accentBar.style.background = "#4B5563";
+          stateText.innerText = "NO MEDIA LOADED";
+        } else if (isNonSteel) {
           sevBadge.classList.add('badge-med');
           sevBadge.innerText = "GATE";
           accentBar.style.background = "var(--status-med)";
@@ -1355,17 +1353,16 @@
           }
         }
 
-        // Generating Shimmer & Counter (cause/action only)
-        const genBox = document.getElementById('generating-indicator');
-        const genTimer = document.getElementById('generating-timer-text');
+        // Rotating Preloader Spinner (Cause / Action)
+        const spinCause = document.getElementById('spinner-cause');
+        const spinAction = document.getElementById('spinner-action');
         if (data.llm_busy && !isNonSteel) {
-          genBox.classList.add('active');
-          const spd = (data.tok_speed && data.tok_speed > 0) ? ` (${data.tok_speed.toFixed(1)} tok/s)` : '';
-          const tokStr = (data.tokens && data.tokens > 0) ? ` · ${data.tokens} tok` : '';
-          genTimer.innerText = `Llama 3.2 1B Generating… ${data.llm_elapsed.toFixed(1)}s${tokStr}${spd}`;
+          if (spinCause) spinCause.classList.add('active');
+          if (spinAction) spinAction.classList.add('active');
           stateText.innerText = `LOCKED · LLAMA 3.2 1B (${data.llm_elapsed.toFixed(1)}s)`;
         } else {
-          genBox.classList.remove('active');
+          if (spinCause) spinCause.classList.remove('active');
+          if (spinAction) spinAction.classList.remove('active');
         }
 
         // Pause state
@@ -1394,6 +1391,10 @@
 
     function renderLogsTable(rows) {
       const tbody = document.getElementById('logbook-tbody');
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:32px; color:var(--text-muted); font-size:14px; letter-spacing:0.04em;">NO DEFECT INSPECTION RECORDS LOGGED YET</td></tr>';
+        return;
+      }
       tbody.innerHTML = rows.map(r => {
         let badgeClass = 'badge-pass';
         if (r.sev === 'High') badgeClass = 'badge-high';
