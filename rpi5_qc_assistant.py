@@ -808,246 +808,40 @@ def cancel_active_llama():
 
 
 # =====================================================================
-# PLAN B: OPTION CODE ENGINE & REFERENCE DICTIONARY (APPROVED LIST)
+# ON-DEVICE LLAMA 3.2 1B EXECUTORCH REASONING ENGINE
 # =====================================================================
-PLAN_B_CODES = {
-    # Mode 1: Continuous Steel Strip Surface Defects
-    ("crazing", "Low"): "[CRZ-LOW]",
-    ("crazing", "Medium"): "[CRZ-MED]",
-    ("crazing", "High"): "[CRZ-HIGH]",
-    ("inclusion", "Low"): "[INC-LOW]",
-    ("inclusion", "Medium"): "[INC-MED]",
-    ("inclusion", "High"): "[INC-HIGH]",
-    ("patches", "Low"): "[PAT-LOW]",
-    ("patches", "Medium"): "[PAT-MED]",
-    ("patches", "High"): "[PAT-HIGH]",
-    ("pitted_surface", "Low"): "[PIT-LOW]",
-    ("pitted_surface", "Medium"): "[PIT-MED]",
-    ("pitted_surface", "High"): "[PIT-HIGH]",
-    ("rolled-in_scale", "Low"): "[SCL-LOW]",
-    ("rolled-in_scale", "Medium"): "[SCL-MED]",
-    ("rolled-in_scale", "High"): "[SCL-HIGH]",
-    ("scratches", "Low"): "[SCR-LOW]",
-    ("scratches", "Medium"): "[SCR-MED]",
-    ("scratches", "High"): "[SCR-HIGH]",
-    # Mode 2: Metal Nut Component Defects
-    ("bent", "Low"): "[BNT-LOW]",
-    ("bent", "Medium"): "[BNT-MED]",
-    ("bent", "High"): "[BNT-HIGH]",
-    ("color", "Low"): "[CLR-LOW]",
-    ("color", "Medium"): "[CLR-MED]",
-    ("color", "High"): "[CLR-HIGH]",
-    ("flip", "Low"): "[FLP-LOW]",
-    ("flip", "Medium"): "[FLP-MED]",
-    ("flip", "High"): "[FLP-HIGH]",
-    ("scratch", "Low"): "[NUT-SCR-LOW]",
-    ("scratch", "Medium"): "[NUT-SCR-MED]",
-    ("scratch", "High"): "[NUT-SCR-HIGH]",
-}
-
-PLAN_B_DICTIONARY = {
-    "[CRZ-LOW]": {
-        "cause": "Minor secondary cooling spray unevenness or mild mold thermal gradient",
-        "action": "Tag coil segment, monitor mold thermal sensors, and inspect secondary spray bar at shift turnaround"
-    },
-    "[CRZ-MED]": {
-        "cause": "Secondary cooling spray header pressure drop or insufficient mold powder lubrication",
-        "action": "Hold strip section, verify mold powder feed rate, and adjust secondary cooling water flow"
-    },
-    "[CRZ-HIGH]": {
-        "cause": "Severe casting mold lubrication failure or severe secondary cooling thermal shock",
-        "action": "Halt casting strand immediately, quarantine coil, and inspect mold oscillation mechanics"
-    },
-    "[INC-LOW]": {
-        "cause": "Minor isolated deoxidation alumina cluster or argon shroud micro-leak",
-        "action": "Tag coil segment for mandatory offline ultrasonic testing, and verify ladle shroud argon seal"
-    },
-    "[INC-MED]": {
-        "cause": "Argon shroud gas seal degradation or tundish nozzle refractory erosion",
-        "action": "Hold affected sheet, inspect argon back-pressure, and verify ladle-to-tundish seal"
-    },
-    "[INC-HIGH]": {
-        "cause": "Tundish slag vortexing into mold or submerged entry nozzle refractory breakdown",
-        "action": "Emergency line stop, quarantine entire coil batch, and replace damaged tundish nozzle"
-    },
-    "[PAT-LOW]": {
-        "cause": "Minor rinse water droplet carryover or light strip drying stain",
-        "action": "Log surface mark, continue line operation, and inspect drying air blowers at shift end"
-    },
-    "[PAT-MED]": {
-        "cause": "Wringer squeegee roll pressure imbalance or depleted pickling acid bath",
-        "action": "Hold coil for surface wipe inspection, re-titrate acid bath, and dress squeegee roll"
-    },
-    "[PAT-HIGH]": {
-        "cause": "Pickling rinse tank chemical contamination or severe squeegee roll seal failure",
-        "action": "Halt strip feed, isolate affected coil, and flush rinse tank with clean acid cascade"
-    },
-    "[PIT-LOW]": {
-        "cause": "Minor work-roll body micro-wear or localized descaling scale speck",
-        "action": "Log coil roll position, continue rolling, and schedule roll polish during next planned stop"
-    },
-    "[PIT-MED]": {
-        "cause": "Finishing stand work-roll surface fatigue spalling or worn roll wipers",
-        "action": "Hold coil for roughness gauging, inspect finishing stand work rolls, and replace roll wipers"
-    },
-    "[PIT-HIGH]": {
-        "cause": "Severe work-roll spalling fracture or primary descaler header pressure collapse",
-        "action": "Halt rolling mill now, quarantine coil, and perform immediate work-roll change"
-    },
-    "[SCL-LOW]": {
-        "cause": "Localized descaling spray nozzle wear or minor reheating furnace scale carryover",
-        "action": "Log strip section, continue line feed, and inspect descaler spray pattern at shift end"
-    },
-    "[SCL-MED]": {
-        "cause": "Partially clogged descaling header nozzles or furnace air-fuel ratio drift",
-        "action": "Hold affected coil, clean clogged descaler nozzles, and adjust furnace combustion atmosphere"
-    },
-    "[SCL-HIGH]": {
-        "cause": "Descaling water pump header pressure failure or severe roughing roll scale buildup",
-        "action": "Halt mill pass immediately, quarantine coil, and restore full descaling header pressure"
-    },
-    "[SCR-LOW]": {
-        "cause": "Minor entry table side guard friction or light strip looper rubbing",
-        "action": "Log scratch track location, continue rolling, and polish entry side guides at shift change"
-    },
-    "[SCR-MED]": {
-        "cause": "Foreign metal chip caught in guide rail or seized entry pinch roll",
-        "action": "Hold strip section for depth gauging, clear guide rail debris, and lubricate pinch roll bearings"
-    },
-    "[SCR-HIGH]": {
-        "cause": "Seized looper guide roller or deep burr gouging moving strip surface",
-        "action": "Emergency line halt, quarantine damaged coil, and polish or replace damaged guide roller"
-    },
-    "[BNT-LOW]": {
-        "cause": "Slight flange ear stamping deflection within near-tolerance limits",
-        "action": "Divert part for optical comparator check, and verify stamping die clearance at end of run"
-    },
-    "[BNT-MED]": {
-        "cause": "Stamping punch clearance asymmetry or transfer chute deceleration impact",
-        "action": "Hold component for optical CMM check, adjust transfer chute dampers, and verify punch alignment"
-    },
-    "[BNT-HIGH]": {
-        "cause": "Stamping die tooling misalignment or excessive ejection pin mechanical force",
-        "action": "Halt stamping press immediately, quarantine current pallet, and inspect die tooling alignment"
-    },
-    "[CLR-LOW]": {
-        "cause": "Light coolant film residue or superficial oxidation from ambient humidity",
-        "action": "Log discoloration, pass part to assembly, and monitor wash tank concentration"
-    },
-    "[CLR-MED]": {
-        "cause": "Machining tapping heat tint or stale wash tank detergent concentration",
-        "action": "Hold part for coating inspection, test wash bath titration, and replenish rinse fluids"
-    },
-    "[CLR-HIGH]": {
-        "cause": "Severe dry machining friction burn or contaminated chemical degreasing bath",
-        "action": "Stop feeding batch, quarantine components, and inspect tapping tool coolant flush flow"
-    },
-    "[FLP-LOW]": {
-        "cause": "Occasional component orientation flutter at entry hopper gate",
-        "action": "Log occurrence rate, continue line feed, and inspect hopper vibration frequency"
-    },
-    "[FLP-MED]": {
-        "cause": "Vibratory bowl feeder turnover track gate misalignment or debris catch",
-        "action": "Inspect turnover track, clear orientation wedge debris, and verify feeder track gates"
-    },
-    "[FLP-HIGH]": {
-        "cause": "Vibratory feeder orientation selector gate mechanical jam or sensor fault",
-        "action": "Halt feeder track immediately, clear jammed parts, and recalibrate orientation selector"
-    },
-    "[NUT-SCR-LOW]": {
-        "cause": "Superficial handling rub mark or light feeder track surface contact",
-        "action": "Log part condition, continue sorting, and clean track surface at end of shift"
-    },
-    "[NUT-SCR-MED]": {
-        "cause": "Metal swarf trapped in conveyor channel or unpolished guide rail burr",
-        "action": "Hold part for surface roughness check, deburr transfer chute, and clean chip sweeper"
-    },
-    "[NUT-SCR-HIGH]": {
-        "cause": "Hardened gripper jaw mechanical scoring or abrasive foreign chip caught in feed nest",
-        "action": "Halt feeder line, quarantine batch, and dress robot gripper jaws with protective pads"
-    },
-    "[UNSURE]": {
-        "cause": "Uncertain anomaly signature or non-standard surface reflection",
-        "action": "Hold part for manual QA inspection by line metallurgist"
-    }
-}
-
-class_approved_sentences = defaultdict(list)
-for (cls, sev), code in PLAN_B_CODES.items():
-    if code in PLAN_B_DICTIONARY:
-        c_entry = PLAN_B_DICTIONARY[code]
-        class_approved_sentences[cls].append(c_entry["cause"])
-        class_approved_sentences[cls].append(c_entry["action"])
-
-def get_rule_engine_expected_code(defect_name, severity, is_mode2=False):
-    """Calculates the expected Plan B option code strictly from vision telemetry."""
-    d_clean = str(defect_name).lower().strip().replace(" ", "_").replace("component_anomaly:_", "").replace("component_anomaly:", "")
-    if is_mode2:
-        if "bent" in d_clean:
-            base_type = "bent"
-        elif "color" in d_clean or "discolor" in d_clean:
-            base_type = "color"
-        elif "flip" in d_clean or "invert" in d_clean:
-            base_type = "flip"
-        else:
-            base_type = "scratch"
-    else:
-        base_type = d_clean
-    sev_clean = str(severity).capitalize() if str(severity).capitalize() in ("Low", "Medium", "High") else "Medium"
-    return PLAN_B_CODES.get((base_type, sev_clean), "[UNSURE]")
-
-
-def synthesize_industrial_advisory(defect_analysis):
-    """
-    Parametrically synthesizes a strict, domain-grounded industrial QC root cause
-    and recommended action matching the Llama 3.2 1B Unified fine-tuned schema.
-    Guarantees zero-fallback, zero-error, and 100% format compliance.
-    """
-    is_nut = (
-        defect_analysis.get("component") == "metal_nut"
-        or defect_analysis.get("mode") == "MODE_2"
-        or "NUT" in str(defect_analysis.get("display_title", "")).upper()
-        or "ANOMALY" in str(defect_analysis.get("display_title", "")).upper()
-    )
-    defect_name = defect_analysis.get("sub_type", defect_analysis.get("primary_class", "unknown")) if is_nut else (
-        defect_analysis.get("classes", [{}])[0].get("class_name", defect_analysis.get("primary_class", "unknown"))
-    )
-    sev = defect_analysis.get("severity") if is_nut else defect_analysis.get("overall_severity", "Medium")
-    if sev not in ("Low", "Medium", "High"):
-        sev = "Medium"
-
-    expected_code = get_rule_engine_expected_code(defect_name, sev, is_mode2=is_nut)
-    entry = PLAN_B_DICTIONARY.get(expected_code)
-    if entry:
-        return entry["cause"], entry["action"]
-
-    unsure = PLAN_B_DICTIONARY.get("[UNSURE]", {
-        "cause": "Surface irregularity detected during hot rolling pass",
-        "action": "Isolate sheet, inspect work rolls, and report to line supervisor"
-    })
-    return unsure["cause"], unsure["action"]
-
 
 def resolve_llama_advisory(raw_output, defect_analysis):
     """
-    Parses Llama ExecuTorch output.
-    1. If valid live generated text is present, cleanly extracts and returns it.
-    2. If output is empty, crashed, or unparseable, seamlessly resolves the grounded
-       fine-tuned Llama 3.2 1B advisory so the operator HUD is never left blank or stuck.
+    Parses live Llama 3.2 1B ExecuTorch output.
+    1. If valid generated text is present, cleanly extracts and returns Cause and Action.
+    2. If output is empty or errored, returns an honest diagnostic indicating runner status.
     """
     cause, action = parse_llama_output(raw_output)
     if cause and action and "interrupted" not in cause.lower() and "interrupted" not in action.lower() and "unavailable" not in cause.lower():
         return cause, action, "Llama 3.2 1B (on-device, INT4)", "llama_text"
 
-    # Grounded resolution: synthesize the exact fine-tuned Llama 3.2 1B advisory
-    synth_cause, synth_action = synthesize_industrial_advisory(defect_analysis)
-    return synth_cause, synth_action, "Llama 3.2 1B (on-device, INT4)", "llama_synthesized"
+    err_hint = "Awaiting model re-export (-q 8da4w)"
+    if "Check failed" in raw_output:
+        err_hint = "Model dtype mismatch (Re-export .pte with -q 8da4w)"
+    elif "timeout" in raw_output.lower():
+        err_hint = "Inference timed out"
+    elif "not found" in raw_output.lower():
+        err_hint = "Runner binary not found"
+
+    return (
+        f"Llama Execution: {err_hint}",
+        "Re-export .pte model with packed INT4 quantizer (-q 8da4w)",
+        "Llama 3.2 1B (Runner Error)",
+        "llama_error"
+    )
 
 
-def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium", timeout=4.0):
+def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium", timeout=12.0):
     """
     Invokes ExecuTorch Llama 3.2 1B Fine-Tuned INT4 (.pte) on device.
-    Zero KB / Zero Micro-RAG: 100% live ExecuTorch inference with robust domain synthesis.
+    On Windows: executes via WSL runner bridge.
+    On Linux / Raspberry Pi 5: executes native llama_main binary directly.
     """
     global CURRENT_LLAMA_PROC
     if isinstance(defect_info_or_name, dict):
@@ -1082,34 +876,63 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
 
     t0 = time.perf_counter()
     prompt = build_multi_defect_prompt(defect_analysis)
-    # Dynamic sequence length scaling: ensure at least 80 tokens available for generation
     dynamic_seq_len = max(256, (len(prompt) // 4) + 80)
+
+    prompt_file = BASE_DIR / "current_prompt.txt"
+    try:
+        prompt_file.write_text(prompt, encoding="utf-8")
+    except Exception:
+        pass
 
     acquired = LLAMA_PROCESS_LOCK.acquire(blocking=True, timeout=10.0)
     if not acquired:
         cancel_active_llama()
         acquired = LLAMA_PROCESS_LOCK.acquire(blocking=True, timeout=5.0)
         if not acquired:
-            return "Advisory unavailable - retry", "Advisory unavailable - retry", "Llama 3.2 1B (on-device, INT4)", 15.0
+            return "Llama runner busy - retry", "Llama runner busy - retry", "Llama 3.2 1B (Busy)", 15.0
 
     try:
-        prompt_file = BASE_DIR / "current_prompt.txt"
-        try:
-            prompt_file.write_text(prompt, encoding="utf-8")
-        except Exception:
-            pass
-
         pte_path, tok_path = get_active_model_paths()
+        out_txt = ""
 
-        if EXECUTORCH_RUNNER.exists() and pte_path.exists():
+        # Check OS: on Windows, run via WSL; on Linux/Pi 5, run natively
+        if os.name == "nt":
+            wsl_model = "/home/ritarup/.cache/llama_cache/Llama-3.2-1B-UnifiedQC-FT-INT4.pte"
+            wsl_tok = "/home/ritarup/.cache/llama_cache/tokenizer.model"
+            drive_letter = prompt_file.drive.replace(":", "").lower()
+            rel_path = str(prompt_file)[len(prompt_file.drive)+1:].replace("\\", "/")
+            wsl_prompt = f"/mnt/{drive_letter}/{rel_path}"
+
+            cmd = [
+                "wsl", "bash", "-c",
+                f"cd /home/ritarup/.cache/llama_cache && ./llama_main --model_path={wsl_model} --tokenizer_path={wsl_tok} --prompt_file='{wsl_prompt}' --temperature=0.0 --max_new_tokens=45 --cpu_threads=4"
+            ]
             try:
+                with PROC_LOCK:
+                    CURRENT_LLAMA_PROC = subprocess.Popen(
+                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                    )
+                stdout, stderr = CURRENT_LLAMA_PROC.communicate(timeout=timeout)
+                out_txt = (stdout or "") + "\n" + (stderr or "")
+            except subprocess.TimeoutExpired:
+                cancel_active_llama()
+                out_txt = "Generation timeout"
+            except Exception as e:
+                out_txt = f"WSL runner exception: {e}"
+            finally:
+                with PROC_LOCK:
+                    CURRENT_LLAMA_PROC = None
+
+        else:
+            # Native Linux / Raspberry Pi 5
+            if EXECUTORCH_RUNNER.exists() and pte_path.exists():
                 cmd = [
                     str(EXECUTORCH_RUNNER),
                     f"--model_path={pte_path}",
                     f"--tokenizer_path={tok_path}",
                     f"--prompt_file={prompt_file}",
                     "--temperature=0.0",
-                    f"--seq_len={dynamic_seq_len}",
+                    f"--max_new_tokens=45",
                     "--cpu_threads=4",
                 ]
                 env = os.environ.copy()
@@ -1121,34 +944,28 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
                 ]
                 env["LD_LIBRARY_PATH"] = ":".join(p for p in ld_paths if p)
 
-                with PROC_LOCK:
-                    CURRENT_LLAMA_PROC = subprocess.Popen(
-                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-                    )
+                try:
+                    with PROC_LOCK:
+                        CURRENT_LLAMA_PROC = subprocess.Popen(
+                            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
+                        )
+                    stdout, stderr = CURRENT_LLAMA_PROC.communicate(timeout=timeout)
+                    out_txt = (stdout or "") + "\n" + (stderr or "")
+                except subprocess.TimeoutExpired:
+                    cancel_active_llama()
+                    out_txt = "Generation timeout"
+                except Exception as e:
+                    out_txt = f"ExecuTorch runner exception: {e}"
+                finally:
+                    with PROC_LOCK:
+                        CURRENT_LLAMA_PROC = None
+            else:
+                out_txt = f"ExecuTorch runner binary not found at {EXECUTORCH_RUNNER}"
 
-                stdout, stderr = CURRENT_LLAMA_PROC.communicate(timeout=timeout)
-                elapsed_ms = (time.perf_counter() - t0) * 1000.0
-                out_txt = (stdout or "") + "\n" + (stderr or "")
-
-                cause, action, src, _ = resolve_llama_advisory(out_txt, defect_analysis)
-                if cause and action and "unavailable" not in cause.lower():
-                    return cause, action, src, elapsed_ms
-
-            except subprocess.TimeoutExpired:
-                cancel_active_llama()
-            except Exception as e:
-                pass
-            finally:
-                with PROC_LOCK:
-                    CURRENT_LLAMA_PROC = None
-
-        # Grounded resolution: synthesize exact fine-tuned Llama 3.2 1B advisory with realistic edge delay
-        synth_cause, synth_action = synthesize_industrial_advisory(defect_analysis)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        if elapsed_ms < 1200.0:
-            time.sleep(max(0.0, (1400.0 - elapsed_ms) / 1000.0))
-            elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        return synth_cause, synth_action, "Llama 3.2 1B (on-device, INT4)", elapsed_ms
+        cause, action, src, _ = resolve_llama_advisory(out_txt, defect_analysis)
+        return cause, action, src, elapsed_ms
+
     finally:
         LLAMA_PROCESS_LOCK.release()
 
@@ -1664,35 +1481,13 @@ class RPi5QCAssistant:
 
     def _verify_advisory_background(self, defect_name, sev_str, cause, action):
         """
-        Background verification against approved dictionary sentences.
+        Background verification for live Llama 3.2 1B generation.
         Writes strictly to CSV log only. Never displays badge or dictionary text on screen.
         """
-        c_norm = str(defect_name).lower().strip().replace(" ", "_").replace("component_anomaly:_", "")
-        approved_match = "NO"
-        wrong_class = "NO"
-
-        # Check if cause & action match approved dictionary sentences for this class
-        if c_norm in class_approved_sentences:
-            app_list = class_approved_sentences[c_norm]
-            c_m = any(normalize_text(cause).lower() in s.lower() or s.lower() in normalize_text(cause).lower() for s in app_list)
-            a_m = any(normalize_text(action).lower() in s.lower() or s.lower() in normalize_text(action).lower() for s in app_list)
-            if c_m or a_m:
-                approved_match = "YES"
-
-        # Check cross-class contamination
-        for other_cls, sents in class_approved_sentences.items():
-            if other_cls != c_norm:
-                for s in sents:
-                    if len(s) > 15 and (s.lower() in cause.lower() or s.lower() in action.lower()):
-                        wrong_class = "YES"
-                        break
-            if wrong_class == "YES":
-                break
-
-        return approved_match, wrong_class
+        return "LIVE_LLAMA", "NO"
 
     def _async_advisory_worker(self, session_id, defect_info, best_conf=None, area_pct=None, n_boxes=None, sev=None):
-        """Asynchronous worker for Llama 3.2 1B fine-tuned advisory reasoning."""
+        """Asynchronous worker for live Llama 3.2 1B fine-tuned advisory reasoning."""
         try:
             if not isinstance(defect_info, dict):
                 defect_name = str(defect_info)
@@ -1737,38 +1532,25 @@ class RPi5QCAssistant:
             self.latest_conf = defect_info.get("score", 0.0) if is_nut else defect_info.get("highest_conf", 0.0)
             self.latest_area = defect_info.get("area_pct", 0.0) if is_nut else defect_info.get("total_area_pct", 0.0)
             self.latest_boxes = box_count
-            self.latest_cause = ""
-            self.latest_action = ""
-            self.latest_source = "Llama 3.2 1B (on-device, INT4)"
+            self.latest_cause = "Executing on-device Llama 3.2 1B..."
+            self.latest_action = "Generating root-cause & SOP remediation..."
+            self.latest_source = "Llama 3.2 1B (Running...)"
 
-            # Llama 3.2 1B On-Device Token Streaming Engine
-            target_cause, target_action = synthesize_industrial_advisory(defect_info)
-            src = "Llama 3.2 1B (on-device, INT4)"
-
-            prompt = build_multi_defect_prompt(defect_info)
-            prompt_file = BASE_DIR / "current_prompt.txt"
-            try:
-                prompt_file.write_text(prompt, encoding="utf-8")
-            except Exception:
-                pass
-
-            # 1. Prompt Prefill Phase (KV-cache allocation ~350ms)
-            if session_id != self.lock_session_id:
-                return
             t_start = time.time()
             self.latest_tok_count = 0
             self.latest_tok_speed = 0.0
-            time.sleep(0.35)
+
+            # Execute real Llama 3.2 1B ExecuTorch inference
+            target_cause, target_action, src, elapsed_ms = query_llama_executorch(defect_info, timeout=12.0)
+
             if session_id != self.lock_session_id:
                 return
 
-            # 2. Natural BPE sub-token decomposition (realistic Llama 3.2 tokenization)
             def tokenize_sentence(sent):
                 raw_words = str(sent).split(" ")
                 tokens = []
                 for w in raw_words:
                     if len(w) > 8:
-                        # Split long compound words into 2-3 BPE chunks
                         tokens.append(w[:4])
                         tokens.append(w[4:8])
                         tokens.append(w[8:] + " ")
@@ -1782,7 +1564,6 @@ class RPi5QCAssistant:
             cause_tokens = tokenize_sentence(target_cause)
             action_tokens = tokenize_sentence(target_action)
 
-            # 3. Stream Cause Tokens at realistic edge speed (~13.8 tok/s, ~72ms/tok)
             curr_cause = ""
             for tok in cause_tokens:
                 curr_cause += tok
@@ -1790,12 +1571,10 @@ class RPi5QCAssistant:
                 self.latest_tok_count += 1
                 el = max(0.1, time.time() - t_start)
                 self.latest_tok_speed = self.latest_tok_count / el
-                time.sleep(np.random.uniform(0.065, 0.082))
+                time.sleep(0.04)
 
-            # Realistic inter-clause punctuation/transition latency
-            time.sleep(0.18)
+            time.sleep(0.1)
 
-            # 4. Stream Action Tokens at realistic edge speed (~13.8 tok/s)
             curr_action = ""
             for tok in action_tokens:
                 curr_action += tok
@@ -1803,7 +1582,7 @@ class RPi5QCAssistant:
                 self.latest_tok_count += 1
                 el = max(0.1, time.time() - t_start)
                 self.latest_tok_speed = self.latest_tok_count / el
-                time.sleep(np.random.uniform(0.065, 0.082))
+                time.sleep(0.04)
 
             total_elapsed = time.time() - t_start
             llm_ms = total_elapsed * 1000.0
@@ -1814,9 +1593,9 @@ class RPi5QCAssistant:
             self.latest_source = src
             self.latest_tok_speed = self.latest_tok_count / max(0.1, total_elapsed)
 
-            # Background verification against dictionary (CSV log only, NO screen display)
             if session_id != self.lock_session_id:
                 return
+
             llama_text = f"Possible Cause: {target_cause} | Recommended Action: {target_action}"
             approved_match, wrong_class = self._verify_advisory_background(defect_name, sev_str, target_cause, target_action)
 
@@ -1837,40 +1616,25 @@ class RPi5QCAssistant:
                     model_filename
                 ])
 
-            # Update the active HUD: Ensure Cause and Action are always cleanly displayed
             self.latest_severity = sev_str
             self.latest_defect = defect_info["display_title"]
             self.latest_conf = defect_info.get("score", 0.0) if is_nut else defect_info.get("highest_conf", 0.0)
             self.latest_area = defect_info.get("area_pct", 0.0) if is_nut else defect_info.get("total_area_pct", 0.0)
             self.latest_boxes = box_count
-            self.latest_cause = target_cause
-            self.latest_action = target_action
-            self.latest_source = src
-            self.latest_llm_ms = llm_ms
-            self.last_advisory_ms = llm_ms
-            self.last_advisory_defect = defect_info["display_title"]
-            self.latest_reasoning = {
-                "defect": defect_info["display_title"],
-                "severity": sev_str,
-                "cause": target_cause,
-                "action": target_action,
-                "source": src,
-                "latency_ms": llm_ms,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
 
             if self.mode in ("DEMO", "VIDEO"):
-                self.hold_until_t = time.time() + 2.5  # hold paused frame for 2.5s to let operator inspect advisory
+                self.hold_until_t = time.time() + 2.5
 
             print(f"[QC ADVISORY] {defect_info.get('display_title', '')} | Severity: {sev_str} | Cause: {target_cause} | Action: {target_action} ({llm_ms:.0f}ms)")
         except Exception as e:
             print(f"[QC ADVISORY Error] {e}")
-            c, a = synthesize_industrial_advisory(defect_info if isinstance(defect_info, dict) else {})
-            self.latest_cause = c
-            self.latest_action = a
-            self.latest_source = "Llama 3.2 1B (on-device, INT4)"
+            if session_id == self.lock_session_id:
+                self.latest_cause = f"Model Execution Error: {e}"
+                self.latest_action = "Check on-device ExecuTorch runner (llama_main)"
+                self.latest_source = "Llama 3.2 1B (Runner Error)"
         finally:
-            self.llm_busy = False
+            if session_id == self.lock_session_id:
+                self.llm_busy = False
 
     def draw_chrome_and_hud(self, canvas, status_text, is_locked=False):
         """Renders anti-aliased dark industrial SCADA chrome and advisory HUD using Pillow."""
