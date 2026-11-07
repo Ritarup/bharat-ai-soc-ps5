@@ -128,16 +128,26 @@ Clone this repository and run the setup script:
 git clone https://github.com/your-username/bharat-ai-soc-ps5.git
 cd bharat-ai-soc-ps5/bharat_rpi5_deploy_halio
 
-chmod +x setup_hailo_rpi5.sh setup_env.sh start_web_station.sh start_desktop_hud.sh
+chmod +x setup_hailo_rpi5.sh setup_env.sh start_web_station.sh start_desktop_hud.sh build_llama_arm64_rpi5.sh
 ./setup_hailo_rpi5.sh
 ```
 
 `setup_hailo_rpi5.sh` will:
 - Install the Hailo PCIe kernel driver and software stack (`sudo apt install hailo-all`).
-- Verify Hailo device node exists at `/dev/hailo0`.
-- Create a Python virtual environment and install lightweight arm64 dependencies (`hailort`, `opencv-python-headless`, `onnxruntime`, `flask`, `numpy`).
+- Verify Hailo device node exists at `/dev/hailo0` (PCIe Gen 3).
+- Create a Python virtual environment with system site-packages and install lightweight arm64 dependencies (`hailort`, `opencv-python-headless`, `onnxruntime`, `flask`, `numpy`).
+- Verify `models/yolo11n_416_v6.hef` for instant 13 TOPS NPU acceleration.
 
-### 2. Launch the SCADA Web Station (Recommended)
+### 2. Build or Verify Native ARM64 ExecuTorch Runner
+On Raspberry Pi 5 (ARM64 / aarch64), no WSL is used or needed. The system executes native ARM64 Linux binaries directly.
+To build the native ARM64 `llama_main` runner on your Raspberry Pi 5:
+
+```bash
+./build_llama_arm64_rpi5.sh
+```
+*(If already compiled or installed in `$HOME/executorch` or `/usr/local/bin`, the system automatically detects it).*
+
+### 3. Launch the SCADA Web Station (Recommended)
 Start the multi-threaded inspection server:
 
 ```bash
@@ -151,7 +161,7 @@ Open your browser:
 The HUD status pill in the top-right corner will show:
 `● HAILO-8L (13 TOPS NPU) · LLAMA 3.2 1B`
 
-### 3. Launch Standalone Desktop OpenCV HUD
+### 4. Launch Standalone Desktop OpenCV HUD
 For direct HDMI touchscreen or monitor display:
 
 ```bash
@@ -171,7 +181,7 @@ bharat_rpi5_deploy_halio/
 │   ├── yolo11n_416_v6.onnx      # Mode 1 Steel Defect YOLO11n ONNX fallback (416x416)
 │   ├── yolo11n_416_v6.hef       # Mode 1 Hailo-8L 13 TOPS compiled binary (10.5 MB)
 │   ├── mvtec_efficientad_s.onnx # Mode 2 Metal Nut Anomaly EfficientAD-S model (256x256)
-│   ├── Llama-3.2-1B-UnifiedQC-FT-INT4.pte # On-device ExecuTorch INT4 LLM model (1.5 GB)
+│   ├── Llama-3.2-1B-UnifiedQC-FT-INT4.pte # On-device ExecuTorch INT4 LLM model (764.9 MB)
 │   ├── tokenizer.model          # Meta Llama 3.2 BPE tokenizer
 │   └── params.json              # Model hyperparameters
 ├── sample_test_images/          # Verified factory test images (clean & defect steel / nut samples)
@@ -184,6 +194,7 @@ bharat_rpi5_deploy_halio/
 ├── requirements_rpi5.txt        # Lightweight Raspberry Pi 5 Python dependencies
 ├── setup_hailo_rpi5.sh          # One-click Hailo PCIe stack & environment installer
 ├── setup_env.sh                 # Generic Python virtual environment setup
+├── build_llama_arm64_rpi5.sh    # Native ARM64 ExecuTorch llama_main compiler for RPi 5
 ├── start_web_station.sh         # One-click launcher for SCADA Web Station (Port 5000)
 ├── start_desktop_hud.sh         # One-click launcher for Desktop OpenCV HUD
 └── .gitignore                   # Excludes heavy .pte files and runtime temp logs

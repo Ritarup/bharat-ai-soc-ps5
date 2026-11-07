@@ -17,9 +17,9 @@ if command -v apt-get &> /dev/null; then
 fi
 
 # 2. Setup Python virtual environment
-echo "[2/4] Setting up Python virtual environment (.venv)..."
+echo "[2/4] Setting up Python virtual environment (.venv with system-site-packages)..."
 if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+    python3 -m venv .venv --system-site-packages
 fi
 
 # 3. Install Python requirements
@@ -29,10 +29,11 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements_rpi5.txt
 
 # 4. Verify Model Files
-echo "[4/4] Verifying model integrity..."
+echo "[4/4] Verifying model integrity (NPU HEF, ONNX, and ExecuTorch PTE)..."
 python3 -c "
 from pathlib import Path
 models = [
+    'models/yolo11n_416_v6.hef',
     'models/yolo11n_416_v6.onnx',
     'models/stage0_selector_224.onnx',
     'models/mvtec_efficientad_s.onnx',
@@ -45,7 +46,7 @@ if missing:
     print('WARNING: Missing models:', missing)
     exit(1)
 else:
-    print('SUCCESS: All 6 core models verified!')
+    print('SUCCESS: All 7 core models (including 13 TOPS Hailo HEF) verified!')
 "
 
 echo ""

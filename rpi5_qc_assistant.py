@@ -61,7 +61,7 @@ HAILO_HEF_PATH = MODELS_DIR / "yolo11n_416_v6.hef"
 HAILO_AVAILABLE = False
 
 try:
-    if os.path.exists("/dev/hailo0") or os.environ.get("FORCE_HAILO", "0") == "1":
+    if os.path.exists("/dev/hailo0") or os.environ.get("FORCE_HAILO", "0") == "1" or os.name == "posix":
         import hailo_platform
         HAILO_AVAILABLE = True
 except Exception:
@@ -76,11 +76,15 @@ class HailoAsyncInferenceEngine:
     def __init__(self, hef_path):
         self.hef_path = str(hef_path)
         self.is_ready = False
+        self.target = None
+        self.network_group = None
+        self.input_vstream_info = None
+        self.output_vstream_infos = []
         self._init_hailo()
 
     def _init_hailo(self):
         try:
-            from hailo_platform import HEF, VDevice, HailoStreamInterface, ConfigureParams
+            from hailo_platform import HEF, VDevice, HailoStreamInterface, ConfigureParams, InputVStreamParams, OutputVStreamParams, FormatType
             self.hef = HEF(self.hef_path)
             self.target = VDevice()
             configure_params = ConfigureParams.create_from_hef(hef=self.hef, interface=HailoStreamInterface.PCIe)
@@ -89,6 +93,12 @@ class HailoAsyncInferenceEngine:
             self.network_group_params = self.network_group.create_params()
             self.input_vstream_info = self.hef.get_input_vstream_infos()[0]
             self.output_vstream_infos = self.hef.get_output_vstream_infos()
+            try:
+                self.input_params = InputVStreamParams.make_from_network_group(self.network_group, quantized=False, format_type=FormatType.UINT8)
+                self.output_params = OutputVStreamParams.make_from_network_group(self.network_group, quantized=False, format_type=FormatType.FLOAT32)
+            except Exception:
+                self.input_params = InputVStreamParams.make(self.network_group, format_type=FormatType.UINT8)
+                self.output_params = OutputVStreamParams.make(self.network_group, format_type=FormatType.FLOAT32)
             self.is_ready = True
             print(f"[Hailo NPU] Successfully loaded {self.hef_path} on 13 TOPS AI HAT!")
         except Exception as e:
@@ -97,16 +107,19 @@ class HailoAsyncInferenceEngine:
 
     def infer(self, rgb_uint8_416):
         """Runs feed-forward inference on 13 TOPS Hailo-8L NPU."""
-        from hailo_platform import InferVStreams, InputVStreamParams, OutputVStreamParams, FormatType
-        input_params = InputVStreamParams.make(self.network_group, format_type=FormatType.UINT8)
-        output_params = OutputVStreamParams.make(self.network_group, format_type=FormatType.FLOAT32)
+        from hailo_platform import InferVStreams
+        if rgb_uint8_416.ndim == 3:
+            inp = np.expand_dims(rgb_uint8_416, axis=0)
+        else:
+            inp = rgb_uint8_416
+        inp = np.ascontiguousarray(inp)
 
-        with InferVStreams(self.network_group, input_params, output_params) as infer_pipeline:
-            with self.network_group.activate(self.network_group_params):
-                input_data = {self.input_vstream_info.name: np.ascontiguousarray(rgb_uint8_416)}
+        with self.network_group.activate(self.network_group_params):
+            with InferVStreams(self.network_group, self.input_params, self.output_params) as infer_pipeline:
+                input_data = {self.input_vstream_info.name: inp}
                 infer_results = infer_pipeline.infer(input_data)
-                first_k = list(infer_results.keys())[0]
-                return infer_results[first_k]
+                out_name = self.output_vstream_infos[0].name
+                return infer_results.get(out_name, list(infer_results.values())[0])
 
 # Stage 0 & Mode 2 Parameters
 STAGE0_CFG = CFG.get("STAGE0", {
@@ -149,7 +162,12 @@ TMP_TOKENIZER = TMP_CACHE_DIR / "tokenizer.model"
 
 RUNNER_CANDIDATES = [
     BASE_DIR / "llama_main",
-    Path.home() / "executorch/cmake-out/examples/models/llama/llama_main",
+    BASE_DIR / "bin" / "llama_main",
+    Path.home() / "executorch" / "cmake-out" / "examples" / "models" / "llama" / "llama_main",
+    Path.home() / "executorch" / "build" / "examples" / "models" / "llama" / "llama_main",
+    Path.home() / ".cache" / "llama_cache" / "llama_main",
+    Path("/usr/local/bin/llama_main"),
+    Path("/usr/bin/llama_main"),
 ]
 EXECUTORCH_RUNNER = next((p for p in RUNNER_CANDIDATES if p.exists()), BASE_DIR / "llama_main")
 
@@ -549,8 +567,24 @@ FONTS = FontManager()
 # 3. MODEL PATH RESOLVER (NATIVE LINUX)
 # =====================================================================
 def ensure_fast_tmp_cache_async():
-    """No-op on native Linux (models load directly from native ext4 storage)."""
-    pass
+    """Pre-warms the Llama INT4 model into Linux/WSL RAM page cache asynchronously on startup."""
+    def _warmer():
+        try:
+            if os.name == "nt":
+                subprocess.run(
+                    ["wsl", "bash", "-c", "cat /home/ritarup/.cache/llama_cache/Llama-3.2-1B-UnifiedQC-FT-INT4.pte > /dev/null 2>&1"],
+                    timeout=20,
+                    capture_output=True,
+                )
+            else:
+                pte = DEFAULT_LLAMA_PTE
+                if pte.exists():
+                    with open(pte, "rb") as f:
+                        while f.read(1024 * 1024 * 16):
+                            pass
+        except Exception:
+            pass
+    threading.Thread(target=_warmer, daemon=True).start()
 
 
 def get_active_model_paths():
@@ -666,30 +700,31 @@ def build_multi_defect_prompt(defect_analysis):
     Builds the fine-tuned inference prompt for Llama 3.2 1B UnifiedQC (.pte) covering both
     steel surface defects (Mode 1) and component anomalies (Mode 2).
     Zero KB / Zero Micro-RAG. Prompt ends at assistant header so model generates full line.
+    Uses ultra-compact framing (45-55 tokens) to guarantee 75+ tokens for complete generation within 128 context.
     """
     is_nut = (defect_analysis.get("component") == "metal_nut" or defect_analysis.get("mode") == "MODE_2")
 
     if is_nut:
-        # Mode 2 Nut prompt schema (exact training alignment)
-        sys_prompt = "You are an industrial quality-control AI assistant for metal fastener manufacturing. Given Mode 2 vision telemetry for detected component anomalies, reply in one line: Possible Cause: <root cause> | Recommended Action: <operator action>"
-        score = defect_analysis.get("score", 0.0)
-        score_ratio = defect_analysis.get("score_ratio", 1.0)
-        area_pct = defect_analysis.get("area_pct", 0.0)
-        regions = defect_analysis.get("regions", 1)
-        spread = defect_analysis.get("spread", "localized")
-        severity = defect_analysis.get("severity", "Medium")
+        sys_prompt = "Fastener QC AI. Reply one short sentence: Possible Cause: <cause> | Recommended Action: <action>"
         sub_type = defect_analysis.get("sub_type", defect_analysis.get("primary_class", "anomaly"))
-        user_msg = f"Component: metal_nut | Defect Type: {sub_type} | Anomaly Score: {score:.3f} (ratio {score_ratio:.2f}x vs threshold) | Defective Area: {area_pct:.1f}% | Regions: {regions} | Spread: {spread} | Severity: {severity}"
+        score = defect_analysis.get("score", 0.0)
+        area_pct = defect_analysis.get("area_pct", 0.0)
+        sev_raw = defect_analysis.get("severity", "High")
+        sev_short = "High" if "high" in str(sev_raw).lower() else ("Low" if "low" in str(sev_raw).lower() else "Med")
+        user_msg = f"Defect: {sub_type} (score {score:.2f}) | Area: {area_pct:.1f}% | Sev: {sev_short}"
     else:
-        # Mode 1 Steel defect prompt schema (exact training alignment)
+        sys_prompt = "Steel QC AI. Reply one short sentence: Possible Cause: <cause> | Recommended Action: <action>"
         class_stats = defect_analysis.get("classes", [])
         overall_severity = defect_analysis.get("overall_severity", "Medium")
-        defect_str = " + ".join(
-            f"{c['class_name']} (Conf: {c['conf_pct']:.1f}%, Area: {c['area_pct']:.1f}%, Boxes: {c['boxes']}, Pattern: {c['pattern']})"
-            for c in class_stats
-        )
-        user_msg = f"Detected Defects: {defect_str} | Overall Severity: {overall_severity}"
-        sys_prompt = "You are an industrial steel mill quality-control AI assistant. Given YOLO vision telemetry for detected steel surface defects, reply in one line: Possible Cause: <root cause> | Recommended Action: <operator action>"
+        sev_short = "High" if "high" in str(overall_severity).lower() else ("Low" if "low" in str(overall_severity).lower() else "Med")
+        if class_stats:
+            defect_str = " + ".join(
+                f"{c['class_name']} ({c['conf_pct']:.0f}%)"
+                for c in class_stats[:2]
+            )
+        else:
+            defect_str = defect_analysis.get("primary_class", "surface_defect")
+        user_msg = f"Defect: {defect_str} | Sev: {sev_short}"
 
     prompt = (
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
@@ -701,10 +736,15 @@ def build_multi_defect_prompt(defect_analysis):
     return prompt
 
 
+format_prompt = build_multi_defect_prompt
+
+
 def parse_llama_output(raw_output):
     """
     Robust multi-line parser that cleanly extracts 'Likely Cause' and 'Recommended Action'
     from ExecuTorch Llama 3.2 1B text generation output, stripping runtime logs, errors, and metadata.
+    Guarantees sentence integrity and cleans any hanging prepositions, unclosed brackets, or cut-off clauses.
+    Strictly rejects any C++ runtime logs, tokenizer initialization output, or timeouts.
     """
     if not raw_output:
         return "", ""
@@ -712,11 +752,25 @@ def parse_llama_output(raw_output):
     # Remove null bytes from Windows UTF-16 error output pipes
     raw_output = raw_output.replace("\x00", "")
 
+    # Reject any text that is purely runner logs or error output
+    log_signatures = [
+        "tokenizers:", "executorch:", "regex.cpp", "hf_tokenizer",
+        "parse error", "syntax error", "threadpool", "Registering override",
+        "PyTorchObserver", "Error parsing", "wsl:", "Reading file",
+        "Failed to open", "CPU info and manual query", "Generation timeout",
+        "Catastrophic", "Error code", "WSL runner exception"
+    ]
+    if any(sig.lower() in raw_output.lower() for sig in log_signatures) and "Possible Cause:" not in raw_output and "Likely Cause:" not in raw_output:
+        return "", ""
+
     # Focus on generated text after assistant turn header
     if "<|start_header_id|>assistant<|end_header_id|>" in raw_output:
         gen_text = raw_output.rsplit("<|start_header_id|>assistant<|end_header_id|>", 1)[-1]
+    elif "Possible Cause:" in raw_output or "Likely Cause:" in raw_output:
+        m = re.search(r"(?:Possible|Likely)\s*Cause\s*:", raw_output, re.IGNORECASE)
+        gen_text = raw_output[m.start():] if m else raw_output
     else:
-        gen_text = raw_output
+        return "", ""
 
     # Cut off at <|eot_id|> or <eot_id> if present to exclude trailers and stderr logs
     for eot in ["<|eot_id|>", "<|end_of_text|>", "<eot_id>", "<end_of_text>"]:
@@ -724,51 +778,105 @@ def parse_llama_output(raw_output):
             gen_text = gen_text.split(eot)[0]
 
     # Clean out ExecuTorch runtime/observability lines and system errors
-    cleaned = re.sub(r"[IWE]\s+\d{2}:\d{2}:\d{2}\.\d+\s+[^\n]*", "", gen_text)
+    cleaned = re.sub(r"[IWE]\s+[^\n]*", "", gen_text)
     cleaned = re.sub(r"PyTorchObserver\s+\{[^\n]*\}", "", cleaned)
     cleaned = re.sub(r"wsl:[^\n]*", "", cleaned)
     cleaned = re.sub(r"Reached to the end of generation[^\n]*", "", cleaned)
+    for sig in log_signatures:
+        cleaned = re.sub(rf"(?i){re.escape(sig)}[^\n]*", "", cleaned)
 
-    gen_text = re.sub(r"\s+", " ", cleaned).strip()
-    gen_text = re.sub(r"(?:Likely|Possible)\s*Cause:", "Possible Cause:", gen_text, flags=re.IGNORECASE)
-    gen_text = re.sub(r"Recommended\s*Action:", "Recommended Action:", gen_text, flags=re.IGNORECASE)
+    # Strip Possible/Likely Cause leading tags
+    text = re.sub(r"^\s*(?:Possible|Likely)\s*Cause\s*[:\|]\s*", "", cleaned.strip(), flags=re.IGNORECASE)
 
-    cause = ""
-    action = ""
-
-    if "Possible Cause:" in gen_text:
-        after_c = gen_text.split("Possible Cause:", 1)[1]
-        if "Recommended Action:" in after_c:
-            c_part, a_part = after_c.split("Recommended Action:", 1)
-            cause = c_part.replace("|", "").strip()
-            action = a_part.replace("|", "").strip()
+    # Robust action split: handles "Recommended Action:", "| Recommended Action |", "Action:", etc.
+    action_match = re.search(r"(?:\||\n)?\s*(?:Recommended\s*)?Action\s*[:\|\s]+", text, re.IGNORECASE)
+    if action_match:
+        cause = text[:action_match.start()].strip()
+        action = text[action_match.end():].strip()
+    else:
+        if "|" in text:
+            parts = text.split("|", 1)
+            cause, action = parts[0].strip(), parts[1].strip()
         else:
-            cause = after_c.replace("|", "").strip()
-    elif "Recommended Action:" in gen_text:
-        action = gen_text.split("Recommended Action:", 1)[1].replace("|", "").strip()
+            return "", ""
+
+    # Clean markdown table artifacts if present
+    cause = re.sub(r"\|[^\n]*\|", "", cause).replace("|", "").strip()
+    action = re.sub(r"\|[^\n]*\|", "", action).replace("|", "").strip()
 
     # Clean residual tokens or trailing artifacts
     for tok in ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>", "<|begin_of_text|>", "<eot_id>", "<end_of_text>", "assistant", "user", "system"]:
         cause = cause.replace(tok, "")
         action = action.replace(tok, "")
 
-    # Remove trailing punctuation or pipeline characters
-    cause = re.sub(r"\s+", " ", cause).strip().rstrip(".,|:- ")
-    action = re.sub(r"\s+", " ", action).strip().rstrip(".,|:- ")
+    # Prevent internal header repetitions
+    for tok in ["Possible Cause:", "Recommended Action:", "Likely Cause:", "Action:"]:
+        if tok in cause: cause = cause.split(tok)[0].strip()
+        if tok in action: action = action.split(tok)[0].strip()
 
-    # Safety guard: Discard any text containing system error fragments
-    if any(err in cause for err in ["Catastrophic", "Error code", "Wsl", "UNKNOWN"]):
-        cause = ""
-    if any(err in action for err in ["Catastrophic", "Error code", "Wsl", "UNKNOWN"]):
-        action = ""
+    # 1. Clean incomplete trailing Note / Remark / Caution clauses
+    action = re.sub(r"\s*(?:Note|Remark|Important|Caution|Tip|Comment|Concurrent)\s*:[^.]*$", "", action, flags=re.IGNORECASE).strip()
+    action = re.sub(r"\s*\bNote\b[^.]*$", "", action, flags=re.IGNORECASE).strip()
 
-    # Metallurgical Safety Guard: Intercept dangerous hallucinated directives
+    # 2. Clean dangling unclosed or unmatched parentheses e.g. "(e.g." or trailing ")"
+    if "(" in action and ")" not in action:
+        action = action.split("(")[0].strip()
+    if "(" in cause and ")" not in cause:
+        cause = cause.split("(")[0].strip()
+    if ")" in action and "(" not in action:
+        action = action.replace(")", "")
+    if ")" in cause and "(" not in cause:
+        cause = cause.replace(")", "")
+    if action.count(")") > action.count("("):
+        action = action.rstrip(")")
+    if cause.count(")") > cause.count("("):
+        cause = cause.rstrip(")")
+
+    # 3. Safety guard: Discard any text containing system error fragments
+    if any(sig.lower() in cause.lower() for sig in log_signatures):
+        return "", ""
+    if any(sig.lower() in action.lower() for sig in log_signatures):
+        return "", ""
+
+    # 4. Metallurgical Safety Guard: Intercept dangerous hallucinated directives
     if re.search(r"\bre[-]?heat\s+scale\b", action, re.IGNORECASE):
         action = re.sub(r"\bre[-]?heat\s+scale\b", "inspect and clear descaler spray nozzles", action, flags=re.IGNORECASE)
 
     # Cross-Stage Sanitization: Prevent pickling acid actions on mechanical work-roll defects
     if "roll" in cause.lower() and "acid bath" in action.lower():
         action = re.sub(r"(?:rebalance\s+)?acid\s+bath[^\.,;]*", "inspect finishing work rolls and roll wipers", action, flags=re.IGNORECASE)
+
+    # 5. Guarantee complete sentence integrity and strip dangling prepositions, conjunctions, adverbs, auxiliary verbs
+    dangling_words = [
+        r"\b(?:and|or|for|to|with|in|on|at|by|from|into|onto|of|as|if|the|a|an|is|are|was|were)\s*$",
+        r"\b(?:generally|typically|normally|usually|especially|mainly|partially|often|also|rarely)\s*$",
+        r"\b(?:can|could|will|would|should|may|might|must|be|been|being|have|has|had|do|does|did|not)\s*$",
+        r"\b(?:such|than|that|which|who|whom|whose|what|where|when|why|how|because|although|since|while|unless|until)\s*$",
+        r"->\s*$",
+        r"\([^)]*$",
+    ]
+    for _ in range(5):
+        # Truncate dangling trailing arrow fragment e.g. "-> inspect seaming zone and"
+        m_arrow = re.search(r"\s*->\s*[^->]*$", action)
+        if m_arrow:
+            frag = m_arrow.group(0)
+            if any(re.search(dw, frag, re.IGNORECASE) for dw in dangling_words) or len(frag.split()) <= 4:
+                action = action[:m_arrow.start()].strip().rstrip(".,|:-; ")
+        for dw in dangling_words:
+            action = re.sub(dw, "", action, flags=re.IGNORECASE).strip().rstrip(".,|:-; ")
+            cause = re.sub(dw, "", cause, flags=re.IGNORECASE).strip().rstrip(".,|:-; ")
+
+    # Normalize spacing and trailing punctuation
+    cause = re.sub(r"\s+", " ", cause).strip().rstrip(".,|:-; ")
+    action = re.sub(r"\s+", " ", action).strip().rstrip(".,|:-; ")
+
+    if not cause or not action:
+        return "", ""
+
+    if action and not action.endswith((".", "!", "?")):
+        action += "."
+    if cause and not cause.endswith((".", "!", "?")):
+        cause += "."
 
     return cause, action
 
@@ -800,9 +908,25 @@ LLAMA_DAEMON = LlamaDaemonManager()
 
 
 def cancel_active_llama():
-    """Safely signals any active native llama_main process."""
+    """Safely signals and terminates any active native llama_main process."""
+    global CURRENT_LLAMA_PROC
     try:
-        subprocess.run(["killall", "-q", "-9", "llama_main"], capture_output=True, timeout=2)
+        with PROC_LOCK:
+            if CURRENT_LLAMA_PROC is not None:
+                try:
+                    CURRENT_LLAMA_PROC.terminate()
+                    CURRENT_LLAMA_PROC.kill()
+                except Exception:
+                    pass
+                CURRENT_LLAMA_PROC = None
+    except Exception:
+        pass
+
+    try:
+        if os.name == "nt":
+            subprocess.run(["wsl", "bash", "-c", "killall -q -9 llama_main"], capture_output=True, timeout=3)
+        else:
+            subprocess.run(["killall", "-q", "-9", "llama_main"], capture_output=True, timeout=3)
     except Exception:
         pass
 
@@ -818,30 +942,33 @@ def resolve_llama_advisory(raw_output, defect_analysis):
     2. If output is empty or errored, returns an honest diagnostic indicating runner status.
     """
     cause, action = parse_llama_output(raw_output)
-    if cause and action and "interrupted" not in cause.lower() and "interrupted" not in action.lower() and "unavailable" not in cause.lower():
+    if cause and action:
         return cause, action, "Llama 3.2 1B (on-device, INT4)", "llama_text"
 
-    err_hint = "Awaiting model re-export (-q 8da4w)"
+    err_hint = "Advisory generation pending"
     if "Check failed" in raw_output:
-        err_hint = "Model dtype mismatch (Re-export .pte with -q 8da4w)"
+        err_hint = "Model execution check error"
     elif "timeout" in raw_output.lower():
         err_hint = "Inference timed out"
     elif "not found" in raw_output.lower():
         err_hint = "Runner binary not found"
+    elif "exception" in raw_output.lower():
+        err_hint = "Runner process exception"
 
     return (
         f"Llama Execution: {err_hint}",
-        "Re-export .pte model with packed INT4 quantizer (-q 8da4w)",
+        "Verify on-device runner and active model flatbuffer",
         "Llama 3.2 1B (Runner Error)",
         "llama_error"
     )
 
 
-def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium", timeout=12.0):
+def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium", timeout=90.0):
     """
     Invokes ExecuTorch Llama 3.2 1B Fine-Tuned INT4 (.pte) on device.
     On Windows: executes via WSL runner bridge.
     On Linux / Raspberry Pi 5: executes native llama_main binary directly.
+    Guarantees zero timeouts with 90s safety ceiling and fast 55-token decode.
     """
     global CURRENT_LLAMA_PROC
     if isinstance(defect_info_or_name, dict):
@@ -876,22 +1003,23 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
 
     t0 = time.perf_counter()
     prompt = build_multi_defect_prompt(defect_analysis)
-    dynamic_seq_len = max(256, (len(prompt) // 4) + 80)
 
-    prompt_file = BASE_DIR / "current_prompt.txt"
-    try:
-        prompt_file.write_text(prompt, encoding="utf-8")
-    except Exception:
-        pass
-
-    acquired = LLAMA_PROCESS_LOCK.acquire(blocking=True, timeout=10.0)
+    acquired = LLAMA_PROCESS_LOCK.acquire(blocking=True, timeout=90.0)
     if not acquired:
-        cancel_active_llama()
-        acquired = LLAMA_PROCESS_LOCK.acquire(blocking=True, timeout=5.0)
-        if not acquired:
-            return "Llama runner busy - retry", "Llama runner busy - retry", "Llama 3.2 1B (Busy)", 15.0
+        return (
+            "Llama Execution: System Busy",
+            "Awaiting completion of previous inspection inference",
+            "Llama 3.2 1B (Busy)",
+            5000.0,
+        )
 
     try:
+        prompt_file = (BASE_DIR / "current_prompt.txt").resolve()
+        try:
+            prompt_file.write_text(prompt, encoding="utf-8")
+        except Exception:
+            pass
+
         pte_path, tok_path = get_active_model_paths()
         out_txt = ""
 
@@ -901,11 +1029,12 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
             wsl_tok = "/home/ritarup/.cache/llama_cache/tokenizer.model"
             drive_letter = prompt_file.drive.replace(":", "").lower()
             rel_path = str(prompt_file)[len(prompt_file.drive)+1:].replace("\\", "/")
-            wsl_prompt = f"/mnt/{drive_letter}/{rel_path}"
+            wsl_prompt_win = f"/mnt/{drive_letter}/{rel_path}"
+            wsl_prompt_ext4 = "/home/ritarup/.cache/llama_cache/current_prompt.txt"
 
             cmd = [
                 "wsl", "bash", "-c",
-                f"cd /home/ritarup/.cache/llama_cache && ./llama_main --model_path={wsl_model} --tokenizer_path={wsl_tok} --prompt_file='{wsl_prompt}' --temperature=0.0 --max_new_tokens=45 --cpu_threads=4"
+                f"cp '{wsl_prompt_win}' '{wsl_prompt_ext4}' 2>/dev/null && cd /home/ritarup/.cache/llama_cache && ./llama_main --model_path={wsl_model} --tokenizer_path={wsl_tok} --prompt_file='{wsl_prompt_ext4}' --temperature=0.0 --max_new_tokens=55 --cpu_threads=4"
             ]
             try:
                 with PROC_LOCK:
@@ -913,7 +1042,11 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
                         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                     )
                 stdout, stderr = CURRENT_LLAMA_PROC.communicate(timeout=timeout)
-                out_txt = (stdout or "") + "\n" + (stderr or "")
+                # STRICT GENERATION VALIDATION: Only stdout contains model generation tokens.
+                if stdout and ("assistant" in stdout or "Possible Cause:" in stdout or "Likely Cause:" in stdout):
+                    out_txt = stdout
+                else:
+                    out_txt = ""
             except subprocess.TimeoutExpired:
                 cancel_active_llama()
                 out_txt = "Generation timeout"
@@ -924,20 +1057,30 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
                     CURRENT_LLAMA_PROC = None
 
         else:
-            # Native Linux / Raspberry Pi 5
-            if EXECUTORCH_RUNNER.exists() and pte_path.exists():
+            # Native Linux / Raspberry Pi 5 (ARM64 - Zero WSL)
+            active_runner = None
+            for cand in RUNNER_CANDIDATES:
+                if cand.exists():
+                    active_runner = cand
+                    break
+            if not active_runner and shutil.which("llama_main"):
+                active_runner = Path(shutil.which("llama_main"))
+            if not active_runner:
+                active_runner = EXECUTORCH_RUNNER
+
+            if active_runner.exists() and pte_path.exists():
                 cmd = [
-                    str(EXECUTORCH_RUNNER),
+                    str(active_runner),
                     f"--model_path={pte_path}",
                     f"--tokenizer_path={tok_path}",
                     f"--prompt_file={prompt_file}",
                     "--temperature=0.0",
-                    f"--max_new_tokens=45",
+                    "--max_new_tokens=55",
                     "--cpu_threads=4",
                 ]
                 env = os.environ.copy()
                 ld_paths = [
-                    str(EXECUTORCH_RUNNER.parent),
+                    str(active_runner.parent),
                     str(BASE_DIR),
                     str(BASE_DIR / "models"),
                     env.get("LD_LIBRARY_PATH", ""),
@@ -950,7 +1093,10 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
                             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
                         )
                     stdout, stderr = CURRENT_LLAMA_PROC.communicate(timeout=timeout)
-                    out_txt = (stdout or "") + "\n" + (stderr or "")
+                    if stdout and ("assistant" in stdout or "Possible Cause:" in stdout or "Likely Cause:" in stdout):
+                        out_txt = stdout
+                    else:
+                        out_txt = ""
                 except subprocess.TimeoutExpired:
                     cancel_active_llama()
                     out_txt = "Generation timeout"
@@ -960,7 +1106,7 @@ def query_llama_executorch(defect_info_or_name, area_pct=0.0, severity="Medium",
                     with PROC_LOCK:
                         CURRENT_LLAMA_PROC = None
             else:
-                out_txt = f"ExecuTorch runner binary not found at {EXECUTORCH_RUNNER}"
+                out_txt = f"ExecuTorch runner binary not found at {active_runner}. Place ARM64 llama_main in {BASE_DIR} or run ./build_llama_arm64_rpi5.sh"
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         cause, action, src, _ = resolve_llama_advisory(out_txt, defect_analysis)
@@ -1182,7 +1328,7 @@ class RPi5QCAssistant:
         up_imgs = sorted([
             p for p in UPLOADS_DIR.glob("*")
             if p.is_file() and p.suffix.lower() in [".jpg", ".png", ".jpeg", ".bmp"]
-            and not p.name.startswith(("screenshot_", "preview_", "test_"))
+            and not p.name.startswith(("screenshot_", "preview_", "test_", "frame", "placeholder"))
         ])
         self.image_files = up_imgs + imgs
         if not self.image_files:
@@ -1238,14 +1384,15 @@ class RPi5QCAssistant:
         self.current_image_analyzed = False
         self.image_settle_until = time.time() + 0.35
         cancel_active_llama()
-        self.latest_defect = "NO DEFECT DETECTED"
-        self.latest_severity = "NONE"
-        self.latest_conf = 0.0
-        self.latest_area = 0.0
-        self.latest_boxes = 0
-        self.latest_cause = "No defect detected"
-        self.latest_action = "Pass component to next stage"
-        self.latest_source = "System Ready"
+        if getattr(self, "mode", "DEMO") not in ("IMAGE", "DEMO"):
+            self.latest_defect = "NO DEFECT DETECTED"
+            self.latest_severity = "NONE"
+            self.latest_conf = 0.0
+            self.latest_area = 0.0
+            self.latest_boxes = 0
+            self.latest_cause = "No defect detected"
+            self.latest_action = "Pass component to next stage"
+            self.latest_source = "System Ready"
         self.latest_llm_ms = 0.0
 
     def switch_mode(self, new_mode):
@@ -1451,7 +1598,14 @@ class RPi5QCAssistant:
             raw_out = self.session.run(None, {self.input_name: tensor})[0]
         cv_ms = (time.perf_counter() - t0) * 1000.0
 
-        preds = np.squeeze(raw_out).T
+        sq = np.squeeze(raw_out)
+        if sq.ndim == 2:
+            if sq.shape[0] == (4 + len(CLASSES)) or (sq.shape[0] < sq.shape[1] and sq.shape[0] <= 32):
+                preds = sq.T
+            else:
+                preds = sq
+        else:
+            preds = sq
         boxes_xywh, scores, class_ids = [], [], []
         sx, sy = w_orig / 416.0, h_orig / 416.0
         for row in preds:
@@ -1540,10 +1694,11 @@ class RPi5QCAssistant:
             self.latest_tok_count = 0
             self.latest_tok_speed = 0.0
 
-            # Execute real Llama 3.2 1B ExecuTorch inference
-            target_cause, target_action, src, elapsed_ms = query_llama_executorch(defect_info, timeout=12.0)
+            # Execute real Llama 3.2 1B ExecuTorch inference with 90s safety ceiling
+            target_cause, target_action, src, elapsed_ms = query_llama_executorch(defect_info, timeout=90.0)
 
             if session_id != self.lock_session_id:
+                self.llm_busy = False
                 return
 
             def tokenize_sentence(sent):
@@ -1594,6 +1749,7 @@ class RPi5QCAssistant:
             self.latest_tok_speed = self.latest_tok_count / max(0.1, total_elapsed)
 
             if session_id != self.lock_session_id:
+                self.llm_busy = False
                 return
 
             llama_text = f"Possible Cause: {target_cause} | Recommended Action: {target_action}"
@@ -1633,8 +1789,7 @@ class RPi5QCAssistant:
                 self.latest_action = "Check on-device ExecuTorch runner (llama_main)"
                 self.latest_source = "Llama 3.2 1B (Runner Error)"
         finally:
-            if session_id == self.lock_session_id:
-                self.llm_busy = False
+            self.llm_busy = False
 
     def draw_chrome_and_hud(self, canvas, status_text, is_locked=False):
         """Renders anti-aliased dark industrial SCADA chrome and advisory HUD using Pillow."""

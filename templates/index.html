@@ -540,7 +540,7 @@
     }
 
     .metric-value {
-      font-family: var(--font-mono);
+      font-family: var(--font-ui);
       font-size: 20px;
       font-weight: 700;
       color: var(--text-main);
@@ -1118,7 +1118,6 @@
 
     // 3. Navigation Controls
     function prevItem() {
-      clearOldAdvisoryDisplay();
       fetch('/api/prev').then(() => {
         fetchLiveFrame();
         updateState();
@@ -1126,7 +1125,6 @@
     }
 
     function nextItem() {
-      clearOldAdvisoryDisplay();
       fetch('/api/next').then(() => {
         fetchLiveFrame();
         updateState();
@@ -1154,7 +1152,6 @@
 
     function onFileSelected(path) {
       if (!path) return;
-      clearOldAdvisoryDisplay();
       fetch(`/api/select_item?path=${encodeURIComponent(path)}`).then(() => {
         fetchLiveFrame();
         updateState();
@@ -1265,10 +1262,10 @@
         if (data.is_mode2) {
           if (lbl1) lbl1.innerText = "Score Ratio";
           if (lbl2) lbl2.innerText = "Anomaly Area";
-          if (lbl3) lbl3.innerText = "Regions (Spread)";
+          if (lbl3) lbl3.innerText = "Regions";
           val1.innerText = data.score_ratio !== undefined ? `${data.score_ratio.toFixed(2)}x` : `${(data.conf * 100).toFixed(1)}%`;
           val2.innerText = `${(data.area || 0).toFixed(1)}%`;
-          val3.innerText = `${data.regions || 0} (${data.spread || "none"})`;
+          val3.innerText = data.regions || 0;
         } else {
           if (lbl1) lbl1.innerText = "Confidence";
           if (lbl2) lbl2.innerText = "Union Area";
@@ -1283,13 +1280,14 @@
         const actionVal = data.action || "";
 
         if (data.llm_busy) {
-          const cDisplay = (causeVal && causeVal !== "Generating advisory...") ? (causeVal + " ▌") : "Llama 3.2 1B generating cause… ▌";
-          const aDisplay = (actionVal && actionVal !== "Generating advisory...") ? (actionVal + " ▌") : (causeVal && causeVal !== "Generating advisory..." ? "Generating action… ▌" : "");
+          const isPlaceholder = !causeVal || causeVal === "Generating advisory..." || causeVal === "No defect detected" || causeVal === "No anomaly detected on component" || causeVal.includes("Executing on-device");
+          const cDisplay = !isPlaceholder ? (causeVal + " ▌") : "Llama 3.2 1B synthesizing root cause… ▌";
+          const aDisplay = (actionVal && actionVal !== "Generating advisory..." && actionVal !== "Pass component to next stage" && actionVal !== "Pass component to assembly line" && !actionVal.includes("Generating root-cause")) ? (actionVal + " ▌") : (!isPlaceholder ? "Generating action… ▌" : "");
           document.getElementById('hud-cause-text').innerText = cDisplay;
           document.getElementById('hud-action-text').innerText = aDisplay;
         } else {
-          document.getElementById('hud-cause-text').innerText = (causeVal && causeVal !== "Generating advisory...") ? causeVal : "No defect detected";
-          document.getElementById('hud-action-text').innerText = (actionVal && actionVal !== "Generating advisory...") ? actionVal : "Pass component to next stage";
+          document.getElementById('hud-cause-text').innerText = (causeVal && causeVal !== "Generating advisory...") ? causeVal : (data.is_mode2 ? "No anomaly detected on component" : "No defect detected");
+          document.getElementById('hud-action-text').innerText = (actionVal && actionVal !== "Generating advisory...") ? actionVal : (data.is_mode2 ? "Pass component to assembly line" : "Pass component to next stage");
         }
         document.getElementById('hud-source-tag').innerText = data.engine_source || "Llama 3.2 1B (on-device, INT4)";
 

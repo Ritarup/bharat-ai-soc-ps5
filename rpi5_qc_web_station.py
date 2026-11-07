@@ -37,6 +37,7 @@ from rpi5_qc_assistant import (
     classify_stage0,
     calculate_box_iou,
     detect_mode2_nut,
+    cancel_active_llama,
     MODE2_CFG,
     STAGE0_CFG,
 )
@@ -285,6 +286,9 @@ def background_capture_loop():
 
             elif mode == "IMAGE":
                 if qc_station.image_files:
+                    if getattr(qc_station, "current_image_analyzed", False) and qc_station.paused_raw_frame is not None:
+                        time.sleep(0.04)
+                        continue
                     img_p = qc_station.image_files[qc_station.img_idx % len(qc_station.image_files)]
                     raw_frame_bgr = cv2.imread(str(img_p))
                     qc_station.paused_raw_frame = raw_frame_bgr.copy() if raw_frame_bgr is not None else None
@@ -488,7 +492,7 @@ def background_capture_loop():
                 if ret:
                     with stream_lock:
                         latest_jpeg_bytes = jpeg.tobytes()
-                time.sleep(0.035)
+                time.sleep(0.08 if qc_station.llm_busy else 0.035)
                 continue
 
             # ---------------------------------------------------------
@@ -628,12 +632,155 @@ def background_capture_loop():
         except Exception as e:
             print(f"[Worker Exception] {e}")
 
-        time.sleep(0.035)  # ~28 FPS
+        time.sleep(0.08 if qc_station.llm_busy else 0.035)  # Yield CPU during Llama inference
 
 
 # Start the background worker thread immediately
 worker_thread = threading.Thread(target=background_capture_loop, daemon=True)
 worker_thread.start()
+
+
+def sync_process_static_image(img_path):
+    """
+    Synchronously runs Stage 0 routing, vision inference (YOLO11n or EfficientAD-S),
+    updates all telemetry metrics and latest_jpeg_bytes, and kicks off asynchronous Llama reasoning.
+    Runs in ~20ms before HTTP route returns so UI never flashes 'NO DEFECT DETECTED'.
+    """
+    global latest_jpeg_bytes
+    if not img_path or not Path(img_path).exists():
+        return
+
+    raw_frame_bgr = cv2.imread(str(img_path))
+    if raw_frame_bgr is None:
+        return
+
+    # Check Stage 0 / Pipeline Mode
+    if qc_station.pipeline_mode == "MODE_1":
+        active_pipeline_mode = "MODE_1"
+        stage0_conf = 1.0
+        stage0_route = "MANUAL_MODE_1"
+    elif qc_station.pipeline_mode == "MODE_2":
+        active_pipeline_mode = "MODE_2"
+        stage0_conf = 1.0
+        stage0_route = "MANUAL_MODE_2"
+    else:
+        # AUTO: Stage 0 classifier
+        if qc_station.stage0_session is not None:
+            s0_route, s0_cls, s0_conf, s0_ms = classify_stage0(raw_frame_bgr, qc_station.stage0_session)
+            stage0_conf = s0_conf
+            stage0_route = f"AUTO_{s0_route}"
+            active_pipeline_mode = s0_route if s0_route in ("MODE_1", "MODE_2") else "MODE_1"
+        else:
+            active_pipeline_mode = "MODE_1"
+            stage0_conf = 1.0
+            stage0_route = "AUTO_MODE_1"
+
+    qc_station.active_pipeline_mode = active_pipeline_mode
+    qc_station.stage0_conf = stage0_conf
+    qc_station.stage0_route = stage0_route
+
+    # Cancel previous LLM call
+    cancel_active_llama()
+    qc_station.llm_busy = False
+    qc_station.lock_session_id += 1
+    session_id = qc_station.lock_session_id
+
+    display_frame = None
+
+    if active_pipeline_mode == "MODE_2" and qc_station.mode2_session is not None:
+        # Mode 2: EfficientAD-S
+        nut_res = detect_mode2_nut(raw_frame_bgr, qc_station.mode2_session)
+        qc_station.last_cv_ms = nut_res["cv_ms"] if nut_res else 25.0
+        display_frame = render_mode2_annotated_frame(raw_frame_bgr, nut_res)
+        qc_station.latest_nut_telemetry = nut_res if nut_res else {}
+
+        qc_station.mode2_history.clear()
+        if nut_res and nut_res.get("is_anomalous", False):
+            qc_station.mode2_history.extend([nut_res] * 4)
+            qc_station.latest_lock_cnt = 4
+            qc_station.latest_defect = nut_res.get("display_title", "COMPONENT ANOMALY DETECTED")
+            qc_station.latest_severity = nut_res.get("severity", "High")
+            qc_station.latest_conf = nut_res.get("score", 0.0)
+            qc_station.latest_area = nut_res.get("area_pct", 0.0)
+            qc_station.latest_boxes = nut_res.get("regions", 1)
+            qc_station.latest_cause = "Executing on-device Llama 3.2 1B..."
+            qc_station.latest_action = "Generating root-cause & SOP remediation..."
+            qc_station.latest_source = "Llama 3.2 1B (Running...)"
+            qc_station.llm_busy = True
+            qc_station.llm_start_t = time.time()
+            qc_station.current_image_analyzed = True
+            qc_station.last_locked_defect = f"NUT_ANOMALY_{nut_res.get('sub_type', 'DEFECT')}_{nut_res.get('severity', 'NONE')}"
+            qc_station.paused_raw_frame = raw_frame_bgr.copy()
+
+            threading.Thread(
+                target=qc_station._async_advisory_worker,
+                args=(session_id, nut_res),
+                daemon=True
+            ).start()
+        else:
+            qc_station.latest_lock_cnt = 0
+            qc_station.last_locked_defect = None
+            qc_station.latest_severity = "NONE"
+            qc_station.latest_defect = "CLEAN NUT PASS"
+            qc_station.latest_conf = nut_res["score"] if nut_res else 0.0
+            qc_station.latest_area = 0.0
+            qc_station.latest_boxes = 0
+            qc_station.latest_cause = "No anomaly detected on component"
+            qc_station.latest_action = "Pass component to assembly line"
+            qc_station.latest_source = "System Ready"
+            qc_station.current_image_analyzed = True
+            qc_station.paused_raw_frame = raw_frame_bgr.copy()
+    else:
+        # Mode 1: YOLO11n
+        h_orig, w_orig = raw_frame_bgr.shape[:2]
+        dets, cv_ms = qc_station.detect(raw_frame_bgr)
+        qc_station.last_cv_ms = cv_ms
+        display_frame = render_annotated_display_frame(raw_frame_bgr, dets)
+        defect_info = analyze_multi_defect_detections(dets, w_orig, h_orig)
+        defect_sig = defect_info["signature"] if defect_info["has_defects"] else None
+
+        qc_station.frame_history.clear()
+        if defect_info["has_defects"]:
+            qc_station.frame_history.extend([defect_sig] * 4)
+            qc_station.latest_lock_cnt = 4
+            qc_station.latest_defect = defect_info["display_title"]
+            qc_station.latest_conf = defect_info["highest_conf"]
+            qc_station.latest_area = defect_info["total_area_pct"]
+            qc_station.latest_boxes = defect_info["total_boxes"]
+            qc_station.latest_severity = defect_info["overall_severity"]
+            qc_station.latest_cause = "Executing on-device Llama 3.2 1B..."
+            qc_station.latest_action = "Generating root-cause & SOP remediation..."
+            qc_station.latest_source = "Llama 3.2 1B (Running...)"
+            qc_station.llm_busy = True
+            qc_station.llm_start_t = time.time()
+            qc_station.current_image_analyzed = True
+            qc_station.last_locked_defect = defect_sig
+            qc_station.paused_raw_frame = raw_frame_bgr.copy()
+
+            threading.Thread(
+                target=qc_station._async_advisory_worker,
+                args=(session_id, defect_info),
+                daemon=True
+            ).start()
+        else:
+            qc_station.latest_lock_cnt = 0
+            qc_station.last_locked_defect = None
+            qc_station.latest_severity = "NONE"
+            qc_station.latest_defect = "NO DEFECT DETECTED"
+            qc_station.latest_conf = 0.0
+            qc_station.latest_area = 0.0
+            qc_station.latest_boxes = 0
+            qc_station.latest_cause = "No defect detected"
+            qc_station.latest_action = "Pass component to next stage"
+            qc_station.latest_source = "System Ready"
+            qc_station.current_image_analyzed = True
+            qc_station.paused_raw_frame = raw_frame_bgr.copy()
+
+    if display_frame is not None:
+        ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+        if ret:
+            with stream_lock:
+                latest_jpeg_bytes = jpeg.tobytes()
 
 
 # =====================================================================
@@ -749,6 +896,8 @@ def save_frame():
     with stream_lock:
         jpeg = latest_jpeg_bytes
     if jpeg is not None:
+        if getattr(qc_station, "latest_defect", "") in ("CAMERA OFFLINE", "NO MEDIA LOADED"):
+            return jsonify({"success": False, "error": "Cannot save offline placeholder"}), 400
         ts_str = time.strftime("%Y%m%d_%H%M%S")
         mode_str = qc_station.active_pipeline_mode.lower()
         fname = f"snapshot_{mode_str}_{ts_str}.jpg"
@@ -762,24 +911,30 @@ def save_frame():
 def switch_mode():
     new_mode = request.args.get("mode", "DEMO").upper()
     qc_station.switch_mode(new_mode)
+    if new_mode in ("IMAGE", "DEMO") and qc_station.image_files:
+        idx = qc_station.img_idx if new_mode == "IMAGE" else qc_station.demo_idx
+        img_p = qc_station.image_files[idx % len(qc_station.image_files)]
+        sync_process_static_image(img_p)
     return jsonify({"success": True, "mode": qc_station.mode})
 
 
 @app.route("/api/next")
 def next_item():
     qc_station.trigger_action("NEXT_ITEM")
-    qc_station.current_image_analyzed = False
-    qc_station.image_settle_until = time.time() + 0.35
-    qc_station.lock_session_id += 1
+    if qc_station.mode in ("IMAGE", "DEMO") and qc_station.image_files:
+        idx = qc_station.img_idx if qc_station.mode == "IMAGE" else qc_station.demo_idx
+        img_p = qc_station.image_files[idx % len(qc_station.image_files)]
+        sync_process_static_image(img_p)
     return jsonify({"success": True})
 
 
 @app.route("/api/prev")
 def prev_item():
     qc_station.trigger_action("PREV_ITEM")
-    qc_station.current_image_analyzed = False
-    qc_station.image_settle_until = time.time() + 0.35
-    qc_station.lock_session_id += 1
+    if qc_station.mode in ("IMAGE", "DEMO") and qc_station.image_files:
+        idx = qc_station.img_idx if qc_station.mode == "IMAGE" else qc_station.demo_idx
+        img_p = qc_station.image_files[idx % len(qc_station.image_files)]
+        sync_process_static_image(img_p)
     return jsonify({"success": True})
 
 
@@ -819,11 +974,8 @@ def select_item():
         qc_station.img_idx = img_match_idx
         qc_station.demo_idx = img_match_idx
         qc_station.demo_step_cnt = 0
-        qc_station.paused_raw_frame = None
-        qc_station.reset_lock()
-        qc_station.current_image_analyzed = False
-        qc_station.image_settle_until = time.time() + 0.35
-        qc_station.lock_session_id += 1
+        img_p = qc_station.image_files[img_match_idx]
+        sync_process_static_image(img_p)
         return jsonify({"success": True, "idx": img_match_idx})
     elif qc_station.mode == "VIDEO" and p in resolved_vids:
         qc_station.vid_idx = resolved_vids.index(p)

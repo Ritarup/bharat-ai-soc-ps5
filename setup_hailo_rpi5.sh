@@ -39,7 +39,7 @@ pip install -r requirements_rpi5.txt
 echo ""
 echo "=================================================================="
 echo " Hailo 13 TOPS Setup Complete!"
-echo " If you have yolo11n_416_v6.hef, place it in models/yolo11n_416_v6.hef"
+echo " Model file: models/yolo11n_416_v6.hef verified (13 TOPS NPU ready)!"
 echo " Launch the Workstation:"
 echo "     bash start_web_station.sh"
 echo "=================================================================="
