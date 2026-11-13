@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bharat AI-SoC PS5 · Industrial Steel Defect QC Console</title>
+  <style>
+    /* -------------------------------------------------------------
+       CALM INDUSTRIAL CONTROL-ROOM DESIGN SYSTEM (100% OFFLINE)
+       No neon, glows, gradients, or emoji. 8px grid, 10px radius.
+       ------------------------------------------------------------- */
+    :root {
+      --bg-base: #0E1013;
+      --bg-panel: #161A1F;
+      --bg-card: #0E1013;
+      --border-subtle: #2A2F37;
+      --text-main: #E8EAED;
+      --text-muted: #A0A8B3;
+      --accent-teal: #38B2A0;
+      --accent-hover: #2E9484;
+
+      /* Status colors (used strictly for semantic meaning) */
+      --status-pass: #2ECC71;
+      --status-low: #7B8B9A;
+      --status-med: #D97706;
+      --status-high: #DC2626;
+
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: Consolas, SFMono-Regular, "Liberation Mono", Menlo, Courier, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      user-select: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* -------------------------------------------------------------
+       1. SLIM UNIFIED HEADER (56px)
+       ------------------------------------------------------------- */
+    .app-header {
+      height: 56px;
+      min-height: 56px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 100;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 240px;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text-main);
+    }
+
+    .brand-divider {
+      color: var(--border-subtle);
+      font-weight: 300;
+    }
+
+    .brand-subtitle {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.4px;
+    }
+
+    /* Segmented Mode Control */
+    .mode-segmented-control {
+      display: flex;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .segment-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: background 0.15s ease, color 0.15s ease;
+      outline: none;
+    }
+
+    .segment-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .segment-btn.active {
+      background: var(--accent-teal);
+      color: #0E1013;
+      font-weight: 700;
+    }
+
+    .segment-icon {
+      width: 15px;
+      height: 15px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+    }
+
+    /* 3-Way Mode Toggle: AUTO | MODE 1 (STEEL) | MODE 2 (NUT) */
+    .pipeline-selector-group {
+      display: flex;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .pipe-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+
+    .pipe-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .pipe-btn.active-auto {
+      background: var(--accent-teal);
+      color: #0E1013;
+    }
+
+    .pipe-btn.active-mode1 {
+      background: #0073E6;
+      color: #FFFFFF;
+    }
+
+    .pipe-btn.active-mode2 {
+      background: #DC2626;
+      color: #FFFFFF;
+    }
+
+    /* System Status Chip */
+    .status-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-pass);
+      flex-shrink: 0;
+    }
+
+    /* -------------------------------------------------------------
+       2. MAIN WORKSPACE (Viewport + Result Panel)
+       ------------------------------------------------------------- */
+    .main-workspace {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+      height: calc(100vh - 56px - 36px);
+    }
+
+    /* Hero Viewport */
+    .viewport-area {
+      flex: 1;
+      position: relative;
+      background: var(--bg-base);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .viewport-canvas-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      padding: 48px 24px 62px 24px;
+      box-sizing: border-box;
+    }
+
+    /* Corner Chip: Source Tag & Playlist Selector */
+    .corner-chip-left {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(22, 26, 31, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(42, 47, 55, 0.80);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 20;
+      max-width: calc(100% - 150px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    #active-source-tag {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--accent-teal);
+    }
+
+    .file-select-dropdown {
+      background: rgba(14, 16, 19, 0.85);
+      border: 1px solid rgba(42, 47, 55, 0.85);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      outline: none;
+      cursor: pointer;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-select-dropdown:focus {
+      border-color: var(--accent-teal);
+    }
+
+    /* Corner Chip: 4-Segment Lock Progress */
+    .corner-chip-right {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(22, 26, 31, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(42, 47, 55, 0.80);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 20;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .lock-segments {
+      display: flex;
+      gap: 4px;
+    }
+
+    .lock-bar {
+      width: 14px;
+      height: 7px;
+      border-radius: 2px;
+      background: var(--border-subtle);
+      transition: background 0.15s ease;
+    }
+
+    .lock-bar.active {
+      background: var(--accent-teal);
+    }
+
+    .lock-bar.active-locked {
+      background: var(--status-med);
+    }
+
+    /* Floating Touch Toolbar */
+    .floating-toolbar {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 22, 28, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(48, 56, 68, 0.65);
+      border-radius: 8px;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 30;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .tool-btn {
+      height: 48px;
+      min-width: 80px;
+      padding: 0 14px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      outline: none;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle);
+    }
+
+    .tool-btn.active-pause {
+      background: rgba(217, 119, 6, 0.15);
+      border-color: var(--status-med);
+      color: var(--status-med);
+    }
+
+    .keycap-hint {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: rgba(14, 16, 19, 0.70);
+      border: 1px solid rgba(42, 47, 55, 0.85);
+      border-radius: 3px;
+      padding: 2px 5px;
+      line-height: 1;
+    }
+
+    /* Empty State / Drag & Drop Upload Zone */
+    .upload-dropzone {
+      position: absolute;
+      inset: 20px;
+      background: var(--bg-panel);
+      border: 1px dashed var(--border-subtle);
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 40;
+      cursor: pointer;
+    }
+
+    .upload-dropzone.active-drag {
+      display: flex;
+      border-color: var(--accent-teal);
+      background: rgba(56, 178, 160, 0.05);
+    }
+
+    .upload-zone-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .upload-zone-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* -------------------------------------------------------------
+       3. RIGHT RESULT PANEL (32%, min 340px)
+       ------------------------------------------------------------- */
+    .result-panel {
+      width: 32%;
+      min-width: 340px;
+      max-width: 440px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-subtle);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-subtle) transparent;
+      z-index: 10;
+    }
+
+    /* Card 1: Defect Header */
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .severity-badge-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .severity-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+    }
+
+    .badge-pass {
+      color: var(--status-pass);
+      border-color: rgba(46, 204, 113, 0.4);
+      background: rgba(46, 204, 113, 0.1);
+    }
+
+    .badge-low {
+      color: var(--status-low);
+      border-color: rgba(123, 139, 154, 0.4);
+      background: rgba(123, 139, 154, 0.1);
+    }
+
+    .badge-med {
+      color: var(--status-med);
+      border-color: rgba(217, 119, 6, 0.4);
+      background: rgba(217, 119, 6, 0.1);
+    }
+
+    .badge-high {
+      color: var(--status-high);
+      border-color: rgba(220, 38, 38, 0.4);
+      background: rgba(220, 38, 38, 0.1);
+    }
+
+    .defect-header-container {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .defect-accent-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--status-pass);
+      flex-shrink: 0;
+      transition: background 0.2s ease;
+    }
+
+    .defect-name-text {
+      font-size: clamp(20px, 2.1vw, 32px);
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.15;
+      letter-spacing: -0.5px;
+      word-break: break-word;
+    }
+
+    /* Card 2: Metrics Row */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+
+    .metric-col {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-family: var(--font-ui);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Card 3: Advisory Section */
+    .advisory-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 160px;
+      padding: 12px 14px;
+    }
+
+    .advisory-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .advisory-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .advisory-spinner {
+      display: none;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(56, 178, 160, 0.22);
+      border-top-color: var(--accent-teal);
+      border-radius: 50%;
+      box-sizing: border-box;
+      animation: advisorySpin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .advisory-spinner.active {
+      display: inline-block;
+    }
+
+    @keyframes advisorySpin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .advisory-body {
+      font-size: 13px;
+      line-height: 1.38;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    /* Card 4: Advisory Source Chip */
+    .source-chip-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+    }
+
+    .source-chip-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .source-chip-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    /* -------------------------------------------------------------
+       4. CSV LOGBOOK VIEW (Full-width 100vh table)
+       ------------------------------------------------------------- */
+    .logbook-workspace {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      background: var(--bg-base);
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .logbook-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .logbook-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: 0.4px;
+    }
+
+    .logbook-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .log-filter-select {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .log-action-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+
+    .log-action-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #38404B;
+    }
+
+    .log-table-wrapper {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: var(--bg-panel);
+    }
+
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .log-table th {
+      position: sticky;
+      top: 0;
+      background: #121519;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      z-index: 10;
+    }
+
+    .log-table td {
+      padding: 10px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid #1C2128;
+      color: var(--text-main);
+    }
+
+    .log-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* -------------------------------------------------------------
+       5. THIN BOTTOM TELEMETRY BAR (36px)
+       ------------------------------------------------------------- */
+    .app-bottom-bar {
+      height: 36px;
+      min-height: 36px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-subtle);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 100;
+    }
+
+    .bottom-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .bottom-val {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* -------------------------------------------------------------
+       6. RESPONSIVE BREAKPOINTS (NO SCROLL AT ANY RES)
+       ------------------------------------------------------------- */
+    @media (max-width: 900px) {
+      .main-workspace {
+        flex-direction: column;
+      }
+      .viewport-area {
+        height: 52%;
+        flex: none;
+      }
+      .result-panel {
+        width: 100%;
+        max-width: none;
+        height: 48%;
+        border-left: none;
+        border-top: 1px solid var(--border-subtle);
+        padding: 12px;
+        gap: 10px;
+      }
+      .defect-name-text {
+        font-size: 32px;
+      }
+    }
+
+    @media (max-height: 680px) {
+      .app-header {
+        height: 48px;
+        min-height: 48px;
+      }
+      .main-workspace {
+        height: calc(100vh - 48px - 32px);
+      }
+      .app-bottom-bar {
+        height: 32px;
+        min-height: 32px;
+      }
+      .defect-name-text {
+        font-size: 32px;
+      }
+      .metric-value {
+        font-size: 20px;
+      }
+      .advisory-body {
+        font-size: 14px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .shimmer-bar {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. SLIM UNIFIED HEADER (56px) -->
+  <header class="app-header">
+    <div class="brand-section">
+      <span class="brand-title">BHARAT AI-SOC PS5</span>
+      <span class="brand-divider">·</span>
+      <span class="brand-subtitle">INDUSTRIAL QC</span>
+    </div>
+
+    <!-- 3-Way Mode Toggle: AUTO | MODE 1 (STEEL) | MODE 2 (NUT) -->
+    <div class="pipeline-selector-group" role="group" aria-label="Pipeline Selector">
+      <button class="pipe-btn active-auto" onclick="setPipelineMode('AUTO')" id="pipe-btn-auto" title="Stage 0 Auto Selector">AUTO</button>
+      <button class="pipe-btn" onclick="setPipelineMode('MODE_1')" id="pipe-btn-mode1" title="Mode 1: NEU-DET Steel Sheet Surface Defects">MODE 1: STEEL</button>
+      <button class="pipe-btn" onclick="setPipelineMode('MODE_2')" id="pipe-btn-mode2" title="Mode 2: MVTec AD Metal Nut Component Anomaly">MODE 2: NUT</button>
+    </div>
+
+    <!-- Segmented Mode Control -->
+    <nav class="mode-segmented-control" role="tablist">
+      <button class="segment-btn active" onclick="setMode('DEMO')" id="tab-demo" role="tab">
+        <svg class="segment-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>Demo</span>
+      </button>
+      <button class="segment-btn" onclick="setMode('IMAGE')" id="tab-image" role="tab">
+        <svg class="segment-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span>Image</span>
+      </button>
+      <button class="segment-btn" onclick="setMode('VIDEO')" id="tab-video" role="tab">
+        <svg class="segment-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <span>Video</span>
+      </button>
+      <button class="segment-btn" onclick="setMode('CAMERA')" id="tab-cam" role="tab">
+        <svg class="segment-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Live</span>
+      </button>
+      <button class="segment-btn" onclick="setMode('LOG')" id="tab-log" role="tab">
+        <svg class="segment-icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Log</span>
+      </button>
+    </nav>
+
+    <!-- Real System Status Chip -->
+    <div class="status-chip" id="system-status-chip">
+      <div class="status-indicator-dot"></div>
+      <span id="status-chip-text">YOLO11N · LLAMA 3.2 1B</span>
+    </div>
+  </header>
+
+  <!-- 2. MAIN WORKSPACE -->
+  <main class="main-workspace" id="viewport-workspace">
+    <!-- Viewport Area (Hero of screen) -->
+    <section class="viewport-area" id="viewport-container">
+      <img src="/api/frame.jpg" class="viewport-canvas-img" id="live-stream-img" alt="Steel Strip Inspection Feed">
+
+      <!-- Corner Chip Left: Active Source & File Dropdown -->
+      <div class="corner-chip-left">
+        <span id="active-source-tag">DEMO SIM · Conveyor</span>
+        <select class="file-select-dropdown" id="file-selector" onchange="onFileSelected(this.value)" style="display:none;"></select>
+      </div>
+
+      <!-- Corner Chip Right: 4-Segment Lock Progress -->
+      <div class="corner-chip-right">
+        <span>LOCK</span>
+        <div class="lock-segments" id="lock-bars">
+          <div class="lock-bar" id="lock-bar-1"></div>
+          <div class="lock-bar" id="lock-bar-2"></div>
+          <div class="lock-bar" id="lock-bar-3"></div>
+          <div class="lock-bar" id="lock-bar-4"></div>
+        </div>
+        <span id="lock-ratio-text">0/4</span>
+      </div>
+
+      <!-- Floating Touch Toolbar (48px Targets) -->
+      <div class="floating-toolbar" role="toolbar">
+        <button class="tool-btn" onclick="prevItem()" id="btn-prev" title="Previous Media">
+          <span>Prev</span>
+          <kbd class="keycap-hint">P</kbd>
+        </button>
+        <button class="tool-btn" onclick="togglePause()" id="btn-pause" title="Pause / Resume Inspection">
+          <span id="btn-pause-text">Pause</span>
+          <kbd class="keycap-hint">Space</kbd>
+        </button>
+        <button class="tool-btn" onclick="nextItem()" id="btn-next" title="Next Media">
+          <span>Next</span>
+          <kbd class="keycap-hint">N</kbd>
+        </button>
+        <button class="tool-btn" onclick="saveFrame()" id="btn-save" title="Save Current Frame to Disk">
+          <span>Save</span>
+          <kbd class="keycap-hint">S</kbd>
+        </button>
+        <button class="tool-btn" onclick="document.getElementById('upload-input').click()" id="btn-upload" title="Upload Media File">
+          <span>Upload</span>
+          <kbd class="keycap-hint">O</kbd>
+        </button>
+        <input type="file" id="upload-input" style="display:none;" onchange="uploadFile(this.files[0])" accept="image/*,video/*">
+      </div>
+
+      <!-- Empty Media / Drag & Drop Upload Zone -->
+      <div class="upload-dropzone" id="upload-dropzone" onclick="document.getElementById('upload-input').click()">
+        <svg style="width:36px;height:36px;stroke:var(--text-muted);fill:none;stroke-width:1.8;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="upload-zone-title">Upload Steel Inspection Media</div>
+        <div class="upload-zone-sub">Drop steel strip image or conveyor video here or click to browse (O)</div>
+      </div>
+    </section>
+
+    <!-- 3. RIGHT RESULT PANEL (32%, min 340px) -->
+    <aside class="result-panel">
+      <!-- Card 1: Defect Header & Severity -->
+      <div class="panel-card">
+        <div class="severity-badge-row">
+          <span class="severity-badge badge-pass" id="hud-severity-badge">PASS</span>
+          <span style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted);" id="inspection-state-text">IDLE · READY</span>
+        </div>
+        <div class="defect-header-container">
+          <div class="defect-accent-bar" id="defect-accent-bar"></div>
+          <h1 class="defect-name-text" id="hud-defect-name">NO DEFECT DETECTED</h1>
+        </div>
+      </div>
+
+      <!-- Card 2: Metrics Row (Confidence/Score / Area / Boxes/Regions) -->
+      <div class="panel-card metrics-row">
+        <div class="metric-col">
+          <div class="metric-label" id="metric-label-1">Confidence</div>
+          <div class="metric-value" id="hud-conf-val">0.0%</div>
+        </div>
+        <div class="metric-col">
+          <div class="metric-label" id="metric-label-2">Union Area</div>
+          <div class="metric-value" id="hud-area-val">0.0%</div>
+        </div>
+        <div class="metric-col">
+          <div class="metric-label" id="metric-label-3">Boxes</div>
+          <div class="metric-value" id="hud-boxes-val">0</div>
+        </div>
+      </div>
+
+      <!-- Card 3: Advisory Section (Root Cause & Recommended Action) -->
+      <div class="panel-card advisory-card">
+        <div class="advisory-group" id="group-cause">
+          <div class="advisory-label">
+            <span>Possible Cause</span>
+            <div class="advisory-spinner" id="spinner-cause"></div>
+          </div>
+          <div class="advisory-body" id="hud-cause-text">No defect detected</div>
+        </div>
+
+        <div class="advisory-group" id="group-action">
+          <div class="advisory-label">
+            <span>Recommended Action</span>
+            <div class="advisory-spinner" id="spinner-action"></div>
+          </div>
+          <div class="advisory-body" id="hud-action-text">Pass component to next stage</div>
+        </div>
+      </div>
+
+      <!-- Card 4: Advisory Source Chip -->
+      <div class="panel-card source-chip-box">
+        <div class="source-chip-label">Advisory Source</div>
+        <div class="source-chip-value" id="hud-source-tag">Llama 3.2 1B (on-device, INT4)</div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 4. CSV LOGBOOK WORKSPACE (Full Width 100vh Table) -->
+  <section class="logbook-workspace" id="logbook-workspace">
+    <div class="logbook-toolbar">
+      <div class="logbook-title">INDUSTRIAL DEFECT INSPECTION LOGBOOK (CSV)</div>
+      <div class="logbook-controls">
+        <select class="log-filter-select" id="log-filter-select" onchange="applyLogFilter()">
+          <option value="ALL">All Severities</option>
+          <option value="High">High Severity</option>
+          <option value="Medium">Medium Severity</option>
+          <option value="Low">Low Severity</option>
+        </select>
+        <a href="/api/download_csv" class="log-action-btn" title="Download Full Inspection CSV">
+          <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Download CSV</span>
+        </a>
+        <button class="log-action-btn" onclick="clearLogs()" title="Clear Log Records">
+          <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Clear Logbook</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="log-table-wrapper">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Mode</th>
+            <th>Part</th>
+            <th>Defect Class</th>
+            <th>Score / Conf</th>
+            <th>Score Ratio</th>
+            <th>Area %</th>
+            <th>Regions / Boxes</th>
+            <th>Spread</th>
+            <th>Severity</th>
+            <th>Possible Cause</th>
+            <th>Recommended Action</th>
+            <th>Advisory Source</th>
+            <th>Latency</th>
+          </tr>
+        </thead>
+        <tbody id="logbook-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 5. THIN BOTTOM TELEMETRY BAR (36px) -->
+  <footer class="app-bottom-bar">
+    <div class="bottom-bar-item">
+      <span>Vision:</span>
+      <span class="bottom-val" id="bar-cv-telemetry">32.0 ms (31.2 FPS)</span>
+    </div>
+    <div class="bottom-bar-item">
+      <span>Engine:</span>
+      <span class="bottom-val" id="bar-engine-telemetry">Llama 3.2 1B INT4 (ExecuTorch)</span>
+    </div>
+    <div class="bottom-bar-item">
+      <span>Last Advisory:</span>
+      <span class="bottom-val" id="bar-latency-telemetry">Ready</span>
+    </div>
+  </footer>
+
+  <!-- -------------------------------------------------------------
+       CLIENT LOGIC & EVENT CONTROLLERS
+       ------------------------------------------------------------- -->
+  <script>
+    let currentMode = "DEMO";
+    let isPaused = false;
+    let isFetchingFrame = false;
+    let allLogs = [];
+    const streamImg = document.getElementById('live-stream-img');
+
+    // 1. Universal Double-Buffered 30 FPS Frame Polling Loop
+    function fetchLiveFrame() {
+      if (currentMode === 'LOG' || isFetchingFrame) return;
+      isFetchingFrame = true;
+
+      const bufferImg = new Image();
+      bufferImg.onload = function() {
+        streamImg.src = bufferImg.src;
+        isFetchingFrame = false;
+      };
+      bufferImg.onerror = function() {
+        isFetchingFrame = false;
+      };
+      bufferImg.src = '/api/frame.jpg?t=' + Date.now();
+    }
+    setInterval(fetchLiveFrame, 35);
+
+    function clearOldAdvisoryDisplay() {
+      const spinCause = document.getElementById('spinner-cause');
+      const spinAction = document.getElementById('spinner-action');
+      if (spinCause) spinCause.classList.remove('active');
+      if (spinAction) spinAction.classList.remove('active');
+      document.getElementById('hud-cause-text').innerText = "Scanning component...";
+      document.getElementById('hud-action-text').innerText = "Awaiting defect verification...";
+      document.getElementById('hud-source-tag').innerText = "System Ready";
+      document.getElementById('inspection-state-text').innerText = "SCANNING";
+    }
+
+    // 2. Mode Switching
+    function setMode(mode) {
+      currentMode = mode;
+      clearOldAdvisoryDisplay();
+      document.querySelectorAll('.segment-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`tab-${mode.toLowerCase()}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const viewportWorkspace = document.getElementById('viewport-workspace');
+      const logbookWorkspace = document.getElementById('logbook-workspace');
+      const fileSelector = document.getElementById('file-selector');
+
+      if (mode === 'LOG') {
+        viewportWorkspace.style.display = 'none';
+        logbookWorkspace.style.display = 'flex';
+        fileSelector.style.display = 'none';
+        loadLogs();
+      } else {
+        viewportWorkspace.style.display = 'flex';
+        logbookWorkspace.style.display = 'none';
+        fileSelector.style.display = (mode === 'IMAGE' || mode === 'VIDEO') ? 'inline-block' : 'none';
+        fetchLiveFrame();
+      }
+
+      fetch(`/api/switch_mode?mode=${mode}`).then(() => updateState());
+    }
+
+    // 3. Navigation Controls
+    function prevItem() {
+      fetch('/api/prev').then(() => {
+        fetchLiveFrame();
+        updateState();
+      });
+    }
+
+    function nextItem() {
+      fetch('/api/next').then(() => {
+        fetchLiveFrame();
+        updateState();
+      });
+    }
+
+    function togglePause() {
+      fetch('/api/toggle_pause').then(r => r.json()).then(data => {
+        isPaused = data.is_paused;
+        updatePauseButtonState(isPaused);
+      });
+    }
+
+    function updatePauseButtonState(paused) {
+      const btn = document.getElementById('btn-pause');
+      const text = document.getElementById('btn-pause-text');
+      if (paused) {
+        btn.classList.add('active-pause');
+        text.innerText = "Resume";
+      } else {
+        btn.classList.remove('active-pause');
+        text.innerText = "Pause";
+      }
+    }
+
+    function onFileSelected(path) {
+      if (!path) return;
+      fetch(`/api/select_item?path=${encodeURIComponent(path)}`).then(() => {
+        fetchLiveFrame();
+        updateState();
+      });
+    }
+
+    // 4. File Upload
+    function uploadFile(file) {
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            setMode(res.media_type);
+            updateState();
+          }
+        });
+    }
+
+    // Drag and drop setup
+    const dropzone = document.getElementById('upload-dropzone');
+    window.addEventListener('dragenter', e => { e.preventDefault(); dropzone.classList.add('active-drag'); });
+    dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('active-drag'); });
+    window.addEventListener('dragover', e => { e.preventDefault(); });
+    window.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('active-drag');
+      if (e.dataTransfer.files.length > 0) {
+        uploadFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // 5. Keyboard Shortcuts
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === '1') setMode('DEMO');
+      else if (e.key === '2') setMode('IMAGE');
+      else if (e.key === '3') setMode('VIDEO');
+      else if (e.key === '4') setMode('CAMERA');
+      else if (e.key === '5') setMode('LOG');
+      else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); }
+      else if (e.key === 'p' || e.key === 'P') prevItem();
+      else if (e.key === 'n' || e.key === 'N') nextItem();
+      else if (e.key === 'o' || e.key === 'O') document.getElementById('upload-input').click();
+      else if (e.key === 's' || e.key === 'S') saveFrame();
+    });
+
+    // Pipeline Mode Control (AUTO | MODE 1 | MODE 2)
+    function setPipelineMode(mode) {
+      fetch(`/api/set_pipeline_mode?mode=${mode}`)
+        .then(r => r.json())
+        .then(data => {
+          updatePipelineButtons(data.pipeline_mode);
+          updateState();
+        });
+    }
+
+    function updatePipelineButtons(mode) {
+      const btnAuto = document.getElementById('pipe-btn-auto');
+      const btnMode1 = document.getElementById('pipe-btn-mode1');
+      const btnMode2 = document.getElementById('pipe-btn-mode2');
+      if (!btnAuto || !btnMode1 || !btnMode2) return;
+      btnAuto.className = 'pipe-btn' + (mode === 'AUTO' ? ' active-auto' : '');
+      btnMode1.className = 'pipe-btn' + (mode === 'MODE_1' ? ' active-mode1' : '');
+      btnMode2.className = 'pipe-btn' + (mode === 'MODE_2' ? ' active-mode2' : '');
+    }
+
+    function saveFrame() {
+      fetch('/api/save_frame', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success || data.status === 'ok') {
+            alert('Frame saved: ' + (data.filename || data.path || data.saved_path));
+          } else {
+            alert('Error saving frame: ' + (data.error || 'unknown'));
+          }
+        })
+        .catch(err => alert('Failed to save frame: ' + err));
+    }
+
+    // 6. Periodic State Polling
+    function updateState() {
+      fetch('/api/state').then(r => r.json()).then(data => {
+        // Source and title tags
+        if (currentMode === 'IMAGE' || currentMode === 'VIDEO') {
+          document.getElementById('active-source-tag').innerText = currentMode;
+        } else {
+          document.getElementById('active-source-tag').innerText = data.active_tag;
+        }
+        document.getElementById('status-chip-text').innerText = data.system_status || "YOLO11N · LLAMA 3.2 1B";
+        if (data.pipeline_mode) {
+          updatePipelineButtons(data.pipeline_mode);
+        }
+
+        // Metrics & Defect Name
+        const defectName = data.defect || "NO DEFECT DETECTED";
+        document.getElementById('hud-defect-name').innerText = defectName;
+
+        const lbl1 = document.getElementById('metric-label-1');
+        const lbl2 = document.getElementById('metric-label-2');
+        const lbl3 = document.getElementById('metric-label-3');
+        const val1 = document.getElementById('hud-conf-val');
+        const val2 = document.getElementById('hud-area-val');
+        const val3 = document.getElementById('hud-boxes-val');
+
+        if (data.is_mode2) {
+          if (lbl1) lbl1.innerText = "Score Ratio";
+          if (lbl2) lbl2.innerText = "Anomaly Area";
+          if (lbl3) lbl3.innerText = "Regions";
+          val1.innerText = data.score_ratio !== undefined ? `${data.score_ratio.toFixed(2)}x` : `${(data.conf * 100).toFixed(1)}%`;
+          val2.innerText = `${(data.area || 0).toFixed(1)}%`;
+          val3.innerText = data.regions || 0;
+        } else {
+          if (lbl1) lbl1.innerText = "Confidence";
+          if (lbl2) lbl2.innerText = "Union Area";
+          if (lbl3) lbl3.innerText = "Boxes";
+          val1.innerText = `${(data.conf * 100).toFixed(1)}%`;
+          val2.innerText = `${(data.area || 0).toFixed(1)}%`;
+          val3.innerText = data.boxes || 0;
+        }
+
+        // Cause & Action: Live token streaming HUD
+        const causeVal = data.cause || "";
+        const actionVal = data.action || "";
+
+        if (data.llm_busy) {
+          const isPlaceholder = !causeVal || causeVal === "Generating advisory..." || causeVal === "No defect detected" || causeVal === "No anomaly detected on component" || causeVal.includes("Executing on-device");
+          const cDisplay = !isPlaceholder ? (causeVal + " ▌") : "Llama 3.2 1B synthesizing root cause… ▌";
+          const aDisplay = (actionVal && actionVal !== "Generating advisory..." && actionVal !== "Pass component to next stage" && actionVal !== "Pass component to assembly line" && !actionVal.includes("Generating root-cause")) ? (actionVal + " ▌") : (!isPlaceholder ? "Generating action… ▌" : "");
+          document.getElementById('hud-cause-text').innerText = cDisplay;
+          document.getElementById('hud-action-text').innerText = aDisplay;
+        } else {
+          document.getElementById('hud-cause-text').innerText = (causeVal && causeVal !== "Generating advisory...") ? causeVal : (data.is_mode2 ? "No anomaly detected on component" : "No defect detected");
+          document.getElementById('hud-action-text').innerText = (actionVal && actionVal !== "Generating advisory...") ? actionVal : (data.is_mode2 ? "Pass component to assembly line" : "Pass component to next stage");
+        }
+        document.getElementById('hud-source-tag').innerText = data.engine_source || "Llama 3.2 1B (on-device, INT4)";
+
+        // Telemetry bar
+        const fps = (1000 / Math.max(1, data.cv_ms)).toFixed(1);
+        document.getElementById('bar-cv-telemetry').innerText = `${data.cv_ms.toFixed(1)} ms (${fps} FPS)`;
+        document.getElementById('bar-latency-telemetry').innerText = data.llm_ms > 0 ? `${(data.llm_ms / 1000).toFixed(1)}s` : "Ready";
+
+        // Severity styling
+        const sevBadge = document.getElementById('hud-severity-badge');
+        const accentBar = document.getElementById('defect-accent-bar');
+        const stateText = document.getElementById('inspection-state-text');
+        const isNonSteel = (data.defect && (data.defect.includes("NON-STEEL") || data.defect.includes("NON-METALLIC")));
+
+        sevBadge.className = 'severity-badge';
+        if (data.defect === "CAMERA OFFLINE") {
+          sevBadge.classList.add('badge-pass');
+          sevBadge.innerText = "STANDBY";
+          accentBar.style.background = "#4B5563";
+          stateText.innerText = "CAMERA OFFLINE";
+        } else if (data.defect === "NO MEDIA LOADED") {
+          sevBadge.classList.add('badge-pass');
+          sevBadge.innerText = "STANDBY";
+          accentBar.style.background = "#4B5563";
+          stateText.innerText = "NO MEDIA LOADED";
+        } else if (isNonSteel) {
+          sevBadge.classList.add('badge-med');
+          sevBadge.innerText = "GATE";
+          accentBar.style.background = "var(--status-med)";
+          stateText.innerText = "GATE ACTIVE · PAUSED";
+        } else if (data.severity === "High") {
+          sevBadge.classList.add('badge-high');
+          sevBadge.innerText = "HIGH";
+          accentBar.style.background = "var(--status-high)";
+          stateText.innerText = "DEFECT DETECTED";
+        } else if (data.severity === "Medium") {
+          sevBadge.classList.add('badge-med');
+          sevBadge.innerText = "MEDIUM";
+          accentBar.style.background = "var(--status-med)";
+          stateText.innerText = "DEFECT DETECTED";
+        } else if (data.severity === "Low") {
+          sevBadge.classList.add('badge-low');
+          sevBadge.innerText = "LOW";
+          accentBar.style.background = "var(--status-low)";
+          stateText.innerText = "DEFECT DETECTED";
+        } else {
+          sevBadge.classList.add('badge-pass');
+          sevBadge.innerText = "PASS";
+          accentBar.style.background = "var(--status-pass)";
+          stateText.innerText = "IDLE · READY";
+        }
+
+        // Lock Segments Progress (0/4 to 4/4)
+        const lockCnt = isNonSteel ? 0 : (data.lock_cnt || (data.is_locked ? 4 : 0));
+        document.getElementById('lock-ratio-text').innerText = `${lockCnt}/4`;
+        for (let i = 1; i <= 4; i++) {
+          const bar = document.getElementById(`lock-bar-${i}`);
+          bar.className = 'lock-bar';
+          if (i <= lockCnt) {
+            bar.classList.add(lockCnt === 4 ? 'active-locked' : 'active');
+          }
+        }
+
+        // Rotating Preloader Spinner (Cause / Action)
+        const spinCause = document.getElementById('spinner-cause');
+        const spinAction = document.getElementById('spinner-action');
+        if (data.llm_busy && !isNonSteel) {
+          if (spinCause) spinCause.classList.add('active');
+          if (spinAction) spinAction.classList.add('active');
+          stateText.innerText = `LOCKED · LLAMA 3.2 1B (${data.llm_elapsed.toFixed(1)}s)`;
+        } else {
+          if (spinCause) spinCause.classList.remove('active');
+          if (spinAction) spinAction.classList.remove('active');
+        }
+
+        // Pause state
+        updatePauseButtonState(data.is_paused);
+
+        // Update Playlist Dropdown if files exist
+        const sel = document.getElementById('file-selector');
+        if (data.playlist && data.playlist.length > 0) {
+          sel.style.display = (currentMode === 'IMAGE' || currentMode === 'VIDEO') ? 'inline-block' : 'none';
+          sel.innerHTML = data.playlist.map((p, idx) => 
+            `<option value="${p.path}" ${idx === data.active_idx ? 'selected' : ''}>[${idx+1}/${data.playlist.length}] ${p.name}</option>`
+          ).join('');
+        } else if (currentMode === 'IMAGE' || currentMode === 'VIDEO') {
+          sel.style.display = 'none';
+        }
+      });
+    }
+
+    // 7. Logbook Management
+    function loadLogs() {
+      fetch('/api/logs').then(r => r.json()).then(rows => {
+        allLogs = rows;
+        renderLogsTable(allLogs);
+      });
+    }
+
+    function renderLogsTable(rows) {
+      const tbody = document.getElementById('logbook-tbody');
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:32px; color:var(--text-muted); font-size:14px; letter-spacing:0.04em;">NO DEFECT INSPECTION RECORDS LOGGED YET</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        let badgeClass = 'badge-pass';
+        if (r.sev === 'High') badgeClass = 'badge-high';
+        else if (r.sev === 'Medium') badgeClass = 'badge-med';
+        else if (r.sev === 'Low') badgeClass = 'badge-low';
+
+        const mode = r.mode || "MODE_1";
+        const part = r.part || "steel_sheet";
+        const scoreConf = r.score_conf !== undefined ? r.score_conf : `${r.conf}%`;
+        const scoreRatio = r.score_ratio !== undefined ? r.score_ratio : "-";
+        const areaPct = r.area_pct !== undefined ? `${r.area_pct}%` : `${r.area}%`;
+        const regionsBoxes = r.regions_boxes !== undefined ? r.regions_boxes : (r.boxes || 1);
+        const spread = r.spread || "-";
+
+        return `
+          <tr>
+            <td class="mono-cell">${r.ts}</td>
+            <td class="mono-cell" style="font-weight:700;">${mode}</td>
+            <td class="mono-cell">${part}</td>
+            <td style="font-weight:700; color:var(--text-main);">${(r.defect || "").toUpperCase()}</td>
+            <td class="mono-cell">${scoreConf}</td>
+            <td class="mono-cell">${scoreRatio}</td>
+            <td class="mono-cell">${areaPct}</td>
+            <td class="mono-cell">${regionsBoxes}</td>
+            <td class="mono-cell">${spread}</td>
+            <td><span class="severity-badge ${badgeClass}">${(r.sev || "PASS").toUpperCase()}</span></td>
+            <td>${r.cause || "-"}</td>
+            <td>${r.action || "-"}</td>
+            <td class="mono-cell">${r.src || "-"}</td>
+            <td class="mono-cell">${r.ms || 0} ms</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function applyLogFilter() {
+      const filter = document.getElementById('log-filter-select').value;
+      if (filter === 'ALL') {
+        renderLogsTable(allLogs);
+      } else {
+        renderLogsTable(allLogs.filter(r => r.sev.toLowerCase() === filter.toLowerCase()));
+      }
+    }
+
+    function clearLogs() {
+      if (confirm("Clear all inspection records from the CSV logbook?")) {
+        fetch('/api/clear_logs', { method: 'POST' }).then(() => loadLogs());
+      }
+    }
+
+    setInterval(updateState, 500);
+    updateState();
+  </script>
+</body>
+</html>

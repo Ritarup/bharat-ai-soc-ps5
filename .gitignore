@@ -1,0 +1,22 @@
+# ==============================================================================
+# Native C++ Engine Git Ignore Rules
+# ==============================================================================
+
+# Compiled Object Files
+obj/
+*.o
+*.d
+
+# Compiled Executable Binaries (built cleanly via 'make' on target device)
+bin/*.bin
+
+# Large Model Weights (exceeds GitHub 100MB limit, stored in model hub / cache)
+*.pte
+
+# Python Cache & Bytecode
+__pycache__/
+*.pyc
+
+# Temporary & Log Files
+*.log
+.build_venv/

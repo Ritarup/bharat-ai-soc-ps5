@@ -1,0 +1,19 @@
+[Unit]
+Description=Bharat AI-SoC PS5 Native Industrial Edge QC Engine
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bharat-ai-soc-ps5/native
+ExecStart=/opt/bharat-ai-soc-ps5/native/bin/bharat_qc_native.bin
+Restart=always
+RestartSec=3
+KillMode=mixed
+LimitNOFILE=65536
+CPUSchedulingPolicy=other
+CPUAffinity=0-3
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
